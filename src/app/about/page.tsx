@@ -74,7 +74,7 @@ export default function AboutPage() {
             </div>
 
             <footer className="py-12 border-t border-white/10 text-center bg-black relative z-10 text-gray-600 text-xs">
-                © 2026 NYC Compliance Shield.
+                © 2026 AssetGuard. All rights reserved.
             </footer>
         </div>
     )

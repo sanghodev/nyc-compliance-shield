@@ -6,11 +6,11 @@ import { motion, AnimatePresence, useScroll, useTransform } from "framer-motion"
 import Link from "next/link"
 import {
   LayoutDashboard, Building2, Map as MapIcon, Users, FileText,
-  Settings, Bell, Search, Plus, ExternalLink, ChevronRight,
-  MoreHorizontal, Wrench, CheckCircle, AlertTriangle, Filter, CreditCard,
-  ArrowUpRight, Download, Activity, Calendar, X, Upload, MessageSquare, Send, Eye,
-  Grid, List as ListIcon, Shield, Zap, BarChart3, ChevronDown, ChevronUp,
-  Home, ClipboardList, PenTool, Phone, UserCircle, Clock, Smartphone, Lock, ShieldCheck, Trash2,
+  Settings, Bell, Search, Plus,
+  Wrench, CheckCircle, AlertTriangle, Filter, CreditCard,
+  ArrowUpRight, Activity, X, MessageSquare, Send,
+  Shield, Zap, BarChart3, ChevronDown, ChevronUp,
+  Home, ClipboardList, PenTool, Phone, Clock, Smartphone, Lock, ShieldCheck, Trash2,
   Sparkles, ArrowRight, Scale, Flame, HardHat
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -71,15 +71,7 @@ interface Contractor {
   verified?: boolean
 }
 
-interface Document {
-  id: number
-  name: string
-  type: "PDF" | "DOC" | "IMG"
-  category: "Lease" | "Legal" | "Maintenance" | "Financial"
-  date: string
-  size: string
-  thumbnail: string
-}
+
 
 interface TenantRequest {
   id: number
@@ -107,31 +99,7 @@ interface UserProfile {
   created_at: string
 }
 
-// --- Mock Data ---
-const initialProperties: Property[] = [
-  { id: 1, address: "123 Broadway, NY", borough: "Manhattan", units: 12, status: "Critical", violations: 5, lat: 40.7128, lng: -74.0060, image: "https://images.unsplash.com/photo-1460317442991-0ec209397118?auto=format&fit=crop&w=400" },
-  { id: 2, address: "450 5th Ave, NY", borough: "Manhattan", units: 45, status: "Warning", violations: 2, lat: 40.7527, lng: -73.9822, image: "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&w=400" },
-  { id: 3, address: "789 Bedford Ave, BK", borough: "Brooklyn", units: 8, status: "Good", violations: 0, lat: 40.6960, lng: -73.9575, image: "https://images.unsplash.com/photo-1574958269340-fa927503f3dd?auto=format&fit=crop&w=400" },
-]
-
-const initialContractors: Contractor[] = [
-  { id: 1, name: "Mario Bros Plumbing", type: "Plumbing", category: "Plumbing", rating: 4.9, status: "Available", jobs: 12, image: "https://api.dicebear.com/7.x/avataaars/svg?seed=Mario" },
-  { id: 2, name: "Sparky Electric", type: "Electrical", category: "Electrical", rating: 4.7, status: "Busy", jobs: 8, image: "https://api.dicebear.com/7.x/avataaars/svg?seed=Sparky" },
-  { id: 3, name: "NYC Fix-It All", type: "General", category: "General", rating: 4.5, status: "Available", jobs: 24, image: "https://api.dicebear.com/7.x/avataaars/svg?seed=Fix" },
-  { id: 4, name: "Legal Eagles LLP", type: "Legal", category: "Legal", rating: 5.0, status: "Connected", jobs: 5, image: "https://api.dicebear.com/7.x/avataaars/svg?seed=Legal" },
-]
-
-const initialDocuments: Document[] = [
-  { id: 1, name: "2024_HPD_Registration_123B.pdf", type: "PDF", category: "Legal", date: "2024-01-15", size: "2.4 MB", thumbnail: "https://images.unsplash.com/photo-1450101499163-c8848c66ca85?auto=format&fit=crop&w=500" },
-  { id: 2, name: "Commercial_Lease_Unit_4B.pdf", type: "PDF", category: "Lease", date: "2024-02-10", size: "1.8 MB", thumbnail: "https://images.unsplash.com/photo-1633519159020-00df2864380c?auto=format&fit=crop&w=500" },
-  { id: 3, name: "Boiler_Inspection_Report.pdf", type: "PDF", category: "Maintenance", date: "2024-03-01", size: "4.2 MB", thumbnail: "https://images.unsplash.com/photo-1581092921461-eab62e97a782?auto=format&fit=crop&w=500" },
-  { id: 4, name: "Q1_Financial_Statement.xlsx", type: "DOC", category: "Financial", date: "2024-04-05", size: "850 KB", thumbnail: "https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?auto=format&fit=crop&w=500" },
-]
-
-const initialRequests: TenantRequest[] = [
-  { id: 1, tenantName: "Sarah Jenkins", unit: "4B (123 Broadway)", issue: "Leaking faucet in bathroom", type: "Repair", status: "Pending", date: "Today, 10:30 AM", priority: "Medium" },
-  { id: 2, tenantName: "Mike Ross", unit: "2A (450 5th Ave)", issue: "Heater making loud noise", type: "Repair", status: "Assigned", date: "Yesterday", priority: "High" },
-]
+// (Mock data removed — all data now loaded from Supabase)
 
 // --- LANDING PAGE COMPONENT ---
 interface LandingPageProps {
@@ -787,12 +755,36 @@ function ViolationItem({ v }: { v: any }) {
 
   const insight = getAIInsight(v.novdescription)
 
+  // Calculate deadline countdown based on violation class
+  const getDeadlineInfo = () => {
+    if (!v.novissueddate) return null
+    const issued = new Date(v.novissueddate)
+    const now = new Date()
+    // NYC HPD cure periods: Class A = 90 days, Class B = 30 days, Class C (immediately hazardous) = 24 hours
+    const cureDays = v.class?.includes('A') ? 90 : v.class?.includes('B') ? 30 : 1
+    const deadline = new Date(issued.getTime() + cureDays * 24 * 60 * 60 * 1000)
+    const daysLeft = Math.ceil((deadline.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+    return { daysLeft, cureDays, deadline }
+  }
+  const deadlineInfo = getDeadlineInfo()
+
   return (
     <div className="bg-zinc-950 border border-zinc-800 p-3 rounded-lg hover:bg-zinc-900 transition-colors">
       <div className="flex justify-between items-start cursor-pointer" onClick={() => setExpanded(!expanded)}>
         <div className="flex-1 pr-2">
           <div className="font-medium text-red-400 text-sm mb-1 line-clamp-2">{v.novdescription}</div>
           <div className="text-xs text-zinc-500">Issued: {v.novissueddate && new Date(v.novissueddate).toLocaleDateString()}</div>
+          {/* Fine Deadline Countdown */}
+          {deadlineInfo && (
+            <div className={`inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${deadlineInfo.daysLeft <= 0 ? 'bg-red-500/20 text-red-400 animate-pulse' :
+              deadlineInfo.daysLeft <= 7 ? 'bg-orange-500/20 text-orange-400' :
+                deadlineInfo.daysLeft <= 30 ? 'bg-yellow-500/20 text-yellow-400' :
+                  'bg-green-500/20 text-green-400'
+              }`}>
+              <Clock className="w-3 h-3" />
+              {deadlineInfo.daysLeft <= 0 ? `OVERDUE by ${Math.abs(deadlineInfo.daysLeft)}d` : `D-${deadlineInfo.daysLeft} (${deadlineInfo.cureDays}d cure)`}
+            </div>
+          )}
         </div>
         <div className="flex flex-col items-end gap-2">
           <Badge variant="outline" className="text-red-500 border-red-500/30 text-[10px] shrink-0">{v.class}</Badge>
@@ -937,6 +929,34 @@ export default function APP_ROOT() {
 
   // Admin Data
   const [users, setUsers] = useState<UserProfile[]>([])
+
+  // LL97 Simulator State
+  const [ll97Input, setLl97Input] = useState({ squareFootage: '', heatingFuel: 'Natural Gas', buildingType: 'Multifamily Residential', yearBuilt: '' })
+  const [ll97Result, setLl97Result] = useState<any>(null)
+  const [ll97Loading, setLl97Loading] = useState(false)
+  const runLL97Simulation = async (property?: any) => {
+    setLl97Loading(true)
+    setLl97Result(null)
+    try {
+      const payload = {
+        address: property?.address || 'Selected Property',
+        units: property?.units || 0,
+        borough: property?.borough || 'Manhattan',
+        buildingType: ll97Input.buildingType,
+        squareFootage: ll97Input.squareFootage || undefined,
+        heatingFuel: ll97Input.heatingFuel,
+        yearBuilt: ll97Input.yearBuilt || undefined,
+      }
+      const res = await fetch('/api/ll97_simulate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+      const json = await res.json()
+      if (json.data) setLl97Result(json.data)
+      else alert('Simulation failed: ' + (json.error || 'Unknown error'))
+    } catch (e: any) {
+      alert('Simulation error: ' + e.message)
+    } finally {
+      setLl97Loading(false)
+    }
+  }
 
   useEffect(() => {
     setIsLoaded(true)
@@ -1211,13 +1231,7 @@ export default function APP_ROOT() {
   const [filterCategory, setFilterCategory] = useState("All")
   const [filterLocation, setFilterLocation] = useState("All")
 
-  useEffect(() => {
-    if (manageProp) {
-      fetchCityData(manageProp.address)
-    } else {
-      setPropCityData(null)
-    }
-  }, [manageProp])
+  // (Duplicate useEffect removed — fetchCityData is handled by the earlier effect at line ~1090)
 
   const filteredContractors = contractors.filter(c => {
     const matchCat = filterCategory === "All" || (c.category || c.type) === filterCategory
@@ -1242,9 +1256,14 @@ export default function APP_ROOT() {
         { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } }
       )
 
+      // Generate a secure random password
+      const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$%'
+      const randomValues = crypto.getRandomValues(new Uint8Array(12))
+      const tempPassword = Array.from(randomValues, v => chars[v % chars.length]).join('')
+
       const { data, error } = await tempSupabase.auth.signUp({
         email: forceManagerData.email,
-        password: 'ChangeMe123!', // Default password
+        password: tempPassword,
         options: {
           data: {
             role: 'manager',
@@ -1272,7 +1291,7 @@ export default function APP_ROOT() {
         }])
         setShowForceAddManager(false)
         setForceManagerData({ name: '', email: '', company: '' })
-        alert("Manager created successfully! Default password is 'ChangeMe123!'")
+        alert(`Manager created successfully!\n\nTemporary password: ${tempPassword}\n\nPlease share this password securely with the new manager. They should change it on first login.`)
       }
     } catch (e: any) {
       console.error(e)
@@ -1778,8 +1797,12 @@ export default function APP_ROOT() {
                           value={req.status}
                           onChange={async (e) => {
                             const newStatus = e.target.value;
+                            // Optimistic UI update
                             const updated = requests.map(r => r.id === req.id ? { ...r, status: newStatus } : r);
                             setRequests(updated as any);
+                            // Persist to Supabase
+                            const { error } = await supabase.from('requests').update({ status: newStatus }).eq('id', req.id);
+                            if (error) console.error('Failed to persist status:', error);
                           }}
                         >
                           <option value="Pending">Pending</option>
@@ -1966,7 +1989,7 @@ export default function APP_ROOT() {
         )}
 
         <nav className="p-4 space-y-2 flex-1">
-          {[{ id: 'dashboard', icon: LayoutDashboard, label: 'Overview' }, { id: 'requests', icon: ClipboardList, label: 'Requests', badge: requests.filter(r => r.status === 'Pending').length }, { id: 'map', icon: MapIcon, label: 'Map' }, { id: 'properties', icon: Building2, label: 'Properties' }, { id: 'contractors', icon: Users, label: 'Pro Network' }, { id: 'settings', icon: Settings, label: 'Settings' }].map(i => (
+          {[{ id: 'dashboard', icon: LayoutDashboard, label: 'Overview' }, { id: 'requests', icon: ClipboardList, label: 'Requests', badge: requests.filter(r => r.status === 'Pending').length }, { id: 'map', icon: MapIcon, label: 'Map' }, { id: 'properties', icon: Building2, label: 'Properties' }, { id: 'll97', icon: Flame, label: 'LL97 Simulator' }, { id: 'contractors', icon: Users, label: 'Pro Network' }, { id: 'settings', icon: Settings, label: 'Settings' }].map(i => (
             <button key={i.id} onClick={() => setActiveTab(i.id)} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${activeTab === i.id ? 'bg-primary/10 text-primary shadow-sm shadow-blue-500/10' : 'hover:bg-secondary text-gray-400 hover:text-white'}`}>
               <i.icon className="w-5 h-5" /> {i.label} {i.badge ? <span className="ml-auto bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full shadow-lg shadow-red-500/40">{i.badge}</span> : null}
             </button>
@@ -2053,6 +2076,156 @@ export default function APP_ROOT() {
                   </CardContent>
                 </Card>
               ))}
+            </div>
+          )}
+
+          {/* LL97 CARBON LAW SIMULATOR */}
+          {activeTab === 'll97' && (
+            <div className="space-y-6">
+              <div>
+                <h2 className="text-2xl font-bold flex items-center gap-2"><Flame className="w-6 h-6 text-orange-500" /> LL97 Carbon Emissions Simulator</h2>
+                <p className="text-muted-foreground mt-1">Estimate your building's compliance with NYC Local Law 97 (Climate Mobilization Act) and calculate potential penalties.</p>
+              </div>
+
+              {/* Input Form */}
+              <Card className="bg-card/50 border-zinc-800">
+                <CardHeader>
+                  <CardTitle className="text-lg">Building Information</CardTitle>
+                  <CardDescription>Enter details about your property to simulate LL97 compliance. Select an existing property or enter manually.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {/* Quick select from existing properties */}
+                  {properties.length > 0 && (
+                    <div>
+                      <label className="text-xs text-gray-400 mb-1 block">Quick Select Property</label>
+                      <div className="flex flex-wrap gap-2">
+                        {properties.map(p => (
+                          <Button key={p.id} size="sm" variant="outline" className="text-xs border-zinc-700 hover:border-blue-500 hover:text-blue-400" onClick={() => runLL97Simulation(p)}>
+                            <Building2 className="w-3 h-3 mr-1" /> {p.address}
+                          </Button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div>
+                      <label className="text-xs text-gray-400 mb-1 block">Approx. Square Footage</label>
+                      <Input placeholder="e.g. 50000" value={ll97Input.squareFootage} onChange={e => setLl97Input({ ...ll97Input, squareFootage: e.target.value })} className="bg-zinc-800 border-zinc-600" />
+                    </div>
+                    <div>
+                      <label className="text-xs text-gray-400 mb-1 block">Primary Heating Fuel</label>
+                      <select className="w-full bg-zinc-800 border border-zinc-600 text-white rounded-md p-2 text-sm" value={ll97Input.heatingFuel} onChange={e => setLl97Input({ ...ll97Input, heatingFuel: e.target.value })}>
+                        <option value="Natural Gas">Natural Gas</option>
+                        <option value="#2 Fuel Oil">#2 Fuel Oil</option>
+                        <option value="#4 Fuel Oil">#4 Fuel Oil</option>
+                        <option value="Electric (Grid)">Electric (Grid)</option>
+                        <option value="Steam (District)">Steam (District)</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-xs text-gray-400 mb-1 block">Building Type</label>
+                      <select className="w-full bg-zinc-800 border border-zinc-600 text-white rounded-md p-2 text-sm" value={ll97Input.buildingType} onChange={e => setLl97Input({ ...ll97Input, buildingType: e.target.value })}>
+                        <option value="Multifamily Residential">Multifamily Residential</option>
+                        <option value="Office">Office</option>
+                        <option value="Retail">Retail</option>
+                        <option value="Mixed Use">Mixed Use</option>
+                        <option value="Hotel">Hotel</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-xs text-gray-400 mb-1 block">Year Built</label>
+                      <Input placeholder="e.g. 1960" value={ll97Input.yearBuilt} onChange={e => setLl97Input({ ...ll97Input, yearBuilt: e.target.value })} className="bg-zinc-800 border-zinc-600" />
+                    </div>
+                  </div>
+
+                  <Button className="bg-orange-600 hover:bg-orange-700 text-white gap-2" onClick={() => runLL97Simulation(properties[0])} disabled={ll97Loading}>
+                    {ll97Loading ? <><Activity className="w-4 h-4 animate-spin" /> Simulating...</> : <><Flame className="w-4 h-4" /> Run LL97 Simulation</>}
+                  </Button>
+                </CardContent>
+              </Card>
+
+              {/* Results */}
+              {ll97Result && (
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+                  {/* Status Banner */}
+                  <div className={`p-6 rounded-xl border ${ll97Result.risk_level === 'Critical' ? 'bg-red-500/10 border-red-500/30' : ll97Result.risk_level === 'High' ? 'bg-orange-500/10 border-orange-500/30' : ll97Result.risk_level === 'Medium' ? 'bg-yellow-500/10 border-yellow-500/30' : 'bg-green-500/10 border-green-500/30'}`}>
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="text-xl font-bold flex items-center gap-2">
+                        {ll97Result.risk_level === 'Critical' || ll97Result.risk_level === 'High' ? <AlertTriangle className="w-6 h-6 text-red-500" /> : <CheckCircle className="w-6 h-6 text-green-500" />}
+                        {ll97Result.compliance_status}
+                      </h3>
+                      <Badge className={`text-sm px-3 py-1 ${ll97Result.risk_level === 'Critical' ? 'bg-red-500' : ll97Result.risk_level === 'High' ? 'bg-orange-500' : ll97Result.risk_level === 'Medium' ? 'bg-yellow-500 text-black' : 'bg-green-500'}`}>
+                        {ll97Result.risk_level} Risk
+                      </Badge>
+                    </div>
+                    <p className="text-zinc-300">{ll97Result.summary}</p>
+                  </div>
+
+                  {/* Emission Stats */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <Card className="bg-zinc-900 border-zinc-800"><CardContent className="p-4 text-center">
+                      <div className="text-3xl font-bold text-white mb-1">{ll97Result.estimated_emissions_tco2e}</div>
+                      <div className="text-[10px] text-zinc-500 uppercase font-bold tracking-wider">tCO₂e / Year</div>
+                    </CardContent></Card>
+                    <Card className="bg-zinc-900 border-zinc-800"><CardContent className="p-4 text-center">
+                      <div className="text-3xl font-bold text-blue-400 mb-1">{ll97Result.phase1_limit_tco2e}</div>
+                      <div className="text-[10px] text-zinc-500 uppercase font-bold tracking-wider">Phase 1 Limit (2024-29)</div>
+                    </CardContent></Card>
+                    <Card className="bg-zinc-900 border-zinc-800"><CardContent className="p-4 text-center">
+                      <div className="text-3xl font-bold text-purple-400 mb-1">{ll97Result.phase2_limit_tco2e}</div>
+                      <div className="text-[10px] text-zinc-500 uppercase font-bold tracking-wider">Phase 2 Limit (2030-34)</div>
+                    </CardContent></Card>
+                    <Card className="bg-zinc-900 border-zinc-800"><CardContent className="p-4 text-center">
+                      <div className="text-3xl font-bold text-red-400 mb-1">{ll97Result.total_10yr_penalty_risk}</div>
+                      <div className="text-[10px] text-zinc-500 uppercase font-bold tracking-wider">10-Year Penalty Risk</div>
+                    </CardContent></Card>
+                  </div>
+
+                  {/* Annual Penalties */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <Card className="bg-zinc-900 border-zinc-800"><CardContent className="p-5">
+                      <div className="text-xs text-zinc-500 uppercase font-bold tracking-wider mb-2">Phase 1 Annual Penalty (2024-2029)</div>
+                      <div className="text-2xl font-bold text-white">${ll97Result.phase1_penalty_annual?.toLocaleString() || '0'}</div>
+                      <div className="text-xs text-zinc-400 mt-1">$268/ton over limit</div>
+                    </CardContent></Card>
+                    <Card className="bg-zinc-900 border-zinc-800"><CardContent className="p-5">
+                      <div className="text-xs text-zinc-500 uppercase font-bold tracking-wider mb-2">Phase 2 Annual Penalty (2030-2034)</div>
+                      <div className="text-2xl font-bold text-orange-400">${ll97Result.phase2_penalty_annual?.toLocaleString() || '0'}</div>
+                      <div className="text-xs text-zinc-400 mt-1">Stricter limits apply</div>
+                    </CardContent></Card>
+                  </div>
+
+                  {/* Retrofit Recommendations */}
+                  {ll97Result.retrofits?.length > 0 && (
+                    <Card className="bg-zinc-900 border-zinc-800">
+                      <CardHeader>
+                        <CardTitle className="text-lg flex items-center gap-2"><Wrench className="w-5 h-5 text-blue-500" /> Recommended Retrofits</CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-3">
+                        {ll97Result.retrofits.map((r: any, i: number) => (
+                          <div key={i} className="flex items-start gap-4 p-4 bg-zinc-950 border border-zinc-800 rounded-lg">
+                            <div className={`w-2 h-2 rounded-full mt-2 ${r.priority === 'High' ? 'bg-red-500' : r.priority === 'Medium' ? 'bg-yellow-500' : 'bg-green-500'}`} />
+                            <div className="flex-1">
+                              <div className="font-bold text-white text-sm">{r.action}</div>
+                              <div className="text-xs text-zinc-400 mt-1">Cost: {r.estimated_cost} • Emission Reduction: {r.emission_reduction_pct}% • Payback: {r.payback_years} years</div>
+                            </div>
+                            <Badge variant="outline" className={`shrink-0 text-[10px] ${r.priority === 'High' ? 'text-red-400 border-red-500/30' : 'text-green-400 border-green-500/30'}`}>{r.priority}</Badge>
+                          </div>
+                        ))}
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {/* Timeline */}
+                  {ll97Result.compliance_timeline && (
+                    <div className="p-4 bg-blue-900/10 border border-blue-500/20 rounded-xl">
+                      <div className="flex items-center gap-2 text-blue-400 font-bold text-sm mb-1"><Clock className="w-4 h-4" /> Compliance Timeline</div>
+                      <p className="text-zinc-300 text-sm">{ll97Result.compliance_timeline}</p>
+                    </div>
+                  )}
+                </motion.div>
+              )}
             </div>
           )}
 
