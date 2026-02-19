@@ -68,8 +68,6 @@ async function createContractorsTable() {
 
   console.log("--- IMPORTANT: PLEASE RUN THIS SQL IN YOUR SUPABASE SQL EDITOR ---")
   console.log(createTableQuery)
-  console.log(createPropertiesTableQuery)
-  console.log(createRequestsTableQuery)
 
   console.log(enableRLS)
   console.log(policyRead)
