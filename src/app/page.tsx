@@ -11,7 +11,7 @@ import {
   ArrowUpRight, Download, Activity, Calendar, X, Upload, MessageSquare, Send, Eye,
   Grid, List as ListIcon, Shield, Zap, BarChart3, ChevronDown, ChevronUp,
   Home, ClipboardList, PenTool, Phone, UserCircle, Clock, Smartphone, Lock, ShieldCheck, Trash2,
-  Sparkles, ArrowRight
+  Sparkles, ArrowRight, Scale, Flame, HardHat
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -278,6 +278,66 @@ function LandingPage({ onEnter, publicSearchQuery, handlePublicSearch, handleSea
                 <li className="flex gap-3"><Users className="w-5 h-5 text-green-500 shrink-0" /> Instant access to vetted Pros</li>
               </ul>
             </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 3.1 NYC SOLUTIONS */}
+      <section className="py-24 px-6 bg-black border-t border-zinc-900">
+        <div className="max-w-7xl mx-auto">
+          <div className="text-center mb-16 space-y-4">
+            <h2 className="text-4xl md:text-5xl font-bold text-white">NYC Solutions</h2>
+            <p className="text-xl text-gray-400">Specific solutions for complex NYC local law challenges.</p>
+          </div>
+
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <motion.div whileHover={{ y: -5 }} className="bg-zinc-900 border border-zinc-800 p-8 rounded-2xl hover:border-blue-500 transition-colors group">
+              <div className="w-12 h-12 bg-blue-500/10 rounded-xl flex items-center justify-center mb-6 group-hover:bg-blue-500 transition-colors">
+                <ShieldCheck className="w-6 h-6 text-blue-500 group-hover:text-white" />
+              </div>
+              <h3 className="text-xl font-bold text-white mb-3">NYC Compliance</h3>
+              <p className="text-gray-400 text-sm leading-relaxed">Protect your business from fines & local law escalation. Stay ahead of changing regulations.</p>
+            </motion.div>
+
+            <motion.div whileHover={{ y: -5 }} className="bg-zinc-900 border border-zinc-800 p-8 rounded-2xl hover:border-green-500 transition-colors group">
+              <div className="w-12 h-12 bg-green-500/10 rounded-xl flex items-center justify-center mb-6 group-hover:bg-green-500 transition-colors">
+                <ClipboardList className="w-6 h-6 text-green-500 group-hover:text-white" />
+              </div>
+              <h3 className="text-xl font-bold text-white mb-3">Local Law 55</h3>
+              <p className="text-gray-400 text-sm leading-relaxed">Track required inspections & follow-ups in one place. Ensure pest and mold compliance seamlessly.</p>
+            </motion.div>
+
+            <motion.div whileHover={{ y: -5 }} className="bg-zinc-900 border border-zinc-800 p-8 rounded-2xl hover:border-orange-500 transition-colors group">
+              <div className="w-12 h-12 bg-orange-500/10 rounded-xl flex items-center justify-center mb-6 group-hover:bg-orange-500 transition-colors">
+                <Scale className="w-6 h-6 text-orange-500 group-hover:text-white" />
+              </div>
+              <h3 className="text-xl font-bold text-white mb-3">OATH Fines & Hearings</h3>
+              <p className="text-gray-400 text-sm leading-relaxed">The best way to prevent & respond to OATH-related violations. Automated hearing scheduling & evidence prep.</p>
+            </motion.div>
+
+            <motion.div whileHover={{ y: -5 }} className="bg-zinc-900 border border-zinc-800 p-8 rounded-2xl hover:border-purple-500 transition-colors group">
+              <div className="w-12 h-12 bg-purple-500/10 rounded-xl flex items-center justify-center mb-6 group-hover:bg-purple-500 transition-colors">
+                <Search className="w-6 h-6 text-purple-500 group-hover:text-white" />
+              </div>
+              <h3 className="text-xl font-bold text-white mb-3">Lead Paint Compliance</h3>
+              <p className="text-gray-400 text-sm leading-relaxed">From inspections to Local Law 31 XRF & more. Manage XRF testing deadlines and abatement records.</p>
+            </motion.div>
+
+            <motion.div whileHover={{ y: -5 }} className="bg-zinc-900 border border-zinc-800 p-8 rounded-2xl hover:border-red-500 transition-colors group">
+              <div className="w-12 h-12 bg-red-500/10 rounded-xl flex items-center justify-center mb-6 group-hover:bg-red-500 transition-colors">
+                <Flame className="w-6 h-6 text-red-500 group-hover:text-white" />
+              </div>
+              <h3 className="text-xl font-bold text-white mb-3">FDNY Compliance</h3>
+              <p className="text-gray-400 text-sm leading-relaxed">The best data & tools for FDNY compliance. Track fire safety notices and inspection cycles.</p>
+            </motion.div>
+
+            <motion.div whileHover={{ y: -5 }} className="bg-zinc-900 border border-zinc-800 p-8 rounded-2xl hover:border-yellow-500 transition-colors group">
+              <div className="w-12 h-12 bg-yellow-500/10 rounded-xl flex items-center justify-center mb-6 group-hover:bg-yellow-500 transition-colors">
+                <HardHat className="w-6 h-6 text-yellow-500 group-hover:text-white" />
+              </div>
+              <h3 className="text-xl font-bold text-white mb-3">DOB Regulations</h3>
+              <p className="text-gray-400 text-sm leading-relaxed">Manage complaints, violations, & required filings. Stay on top of elevator & boiler cycles.</p>
+            </motion.div>
           </div>
         </div>
       </section>
