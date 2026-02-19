@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { ChevronDown, ChevronUp, Sparkles, ArrowRight } from "lucide-react"
 
-function ViolationItem({ v }: { v: any }) {
+export default function ViolationItem({ v }: { v: any }) {
     const [expanded, setExpanded] = useState(false)
 
     // Simple AI Insight Logic (Mock)
