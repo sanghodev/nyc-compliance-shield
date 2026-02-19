@@ -151,6 +151,7 @@ function LandingPage({ onEnter, publicSearchQuery, handlePublicSearch, handleSea
   const scale = useTransform(scrollY, [0, 300], [1, 1.2])
 
   const [isScrolled, setIsScrolled] = useState(false)
+  const [showDemo, setShowDemo] = useState(false)
   useEffect(() => { return scrollY.onChange((latest) => setIsScrolled(latest > 50)) }, [scrollY])
 
   return (
@@ -226,7 +227,7 @@ function LandingPage({ onEnter, publicSearchQuery, handlePublicSearch, handleSea
 
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.8 }} className="flex justify-center gap-4 pt-4">
             <Button size="lg" className="bg-blue-600 hover:bg-blue-700 text-white px-8 rounded-full h-12 text-lg" onClick={() => onEnter("manager")}>Get Started</Button>
-            <Button size="lg" variant="outline" className="border-white/30 text-white hover:bg-white/10 px-8 rounded-full h-12 text-lg">Watch Demo</Button>
+            <Button size="lg" variant="outline" className="border-white/30 text-white hover:bg-white/10 px-8 rounded-full h-12 text-lg" onClick={() => setShowDemo(true)}>Watch Demo</Button>
           </motion.div>
         </motion.div>
       </section>
@@ -642,7 +643,42 @@ function TenantDashboard({ onLogout, onRequestSubmit }: { onLogout: () => void, 
             <Button className="w-full bg-green-600 hover:bg-green-700 text-white h-12 rounded-xl text-lg font-bold shadow-lg shadow-green-200" onClick={handleSubmit}>Submit Request</Button>
           </div>
         </motion.div>
-      )}</AnimatePresence>
+      )}
+      </AnimatePresence>
+
+      {/* DEMO VIDEO MODAL */}
+      <AnimatePresence>
+        {showDemo && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[9999] bg-black/90 flex items-center justify-center p-4 backdrop-blur-md"
+            onClick={() => setShowDemo(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="relative w-full max-w-5xl aspect-video bg-black rounded-3xl overflow-hidden shadow-2xl border border-white/10"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <button
+                onClick={() => setShowDemo(false)}
+                className="absolute top-4 right-4 z-10 w-10 h-10 rounded-full bg-black/50 hover:bg-black/80 flex items-center justify-center text-white transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+              <video
+                src="/demo.mp4"
+                controls
+                autoPlay
+                className="w-full h-full object-cover"
+              />
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }
