@@ -11,7 +11,7 @@ import {
   ArrowUpRight, Activity, X, MessageSquare, Send,
   Shield, Zap, BarChart3, ChevronDown, ChevronUp,
   Home, ClipboardList, PenTool, Phone, Clock, Smartphone, Lock, ShieldCheck, Trash2,
-  Sparkles, ArrowRight, Scale, Flame, HardHat
+  Sparkles, ArrowRight, Scale, Flame, HardHat, Calendar, ArrowUpCircle, Download
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -24,6 +24,7 @@ import dynamic from 'next/dynamic'
 const MapViewer = dynamic(() => import('@/components/MapViewer'), { ssr: false })
 import { supabase } from "@/lib/supabaseClient"
 import { AuthModal } from "@/components/AuthModal"
+import { useGeneratePDF } from "@/hooks/useGeneratePDF"
 
 // --- Types ---
 type UserRole = "manager" | "tenant" | "admin" | "contractor" | null
@@ -97,6 +98,7 @@ interface UserProfile {
   role: string
   status: "Pending" | "Active" | "Suspended"
   created_at: string
+  membership_tier?: "Free" | "Pro" | "Business"
 }
 
 // (Mock data removed — all data now loaded from Supabase)
@@ -923,6 +925,9 @@ export default function APP_ROOT() {
   const [userProfile, setUserProfile] = useState<any>(null)
   const [editProfile, setEditProfile] = useState<any>({}) // Local buffer for edits
 
+  // PDF Report Hook
+  const { generatePDF, isGenerating: isGeneratingPDF } = useGeneratePDF()
+
   // Auth State
   const [showAuthModal, setShowAuthModal] = useState<UserRole>(null)
   const [selectedTier, setSelectedTier] = useState<string>("")
@@ -1023,6 +1028,9 @@ export default function APP_ROOT() {
   const [chatMsg, setChatMsg] = useState("")
   const [manageProp, setManageProp] = useState<Property | null>(null)
   const [propCityData, setPropCityData] = useState<any>(null) // City Data State
+  const [oathHearings, setOathHearings] = useState<any[]>([])
+  const [oathLoading, setOathLoading] = useState(false)
+  const [propTab, setPropTab] = useState<'details' | 'violations' | 'oath'>('details')
 
   // Fetch NYC Open Data
   const fetchCityData = async (address: string, bin?: string, bbl?: string) => {
@@ -1111,8 +1119,32 @@ export default function APP_ROOT() {
     if (manageProp) {
       // Pass BIN/BBL if available in specific property record
       fetchCityData(manageProp.address, manageProp.bin, manageProp.bbl)
+
+      // Fetch OATH Hearings
+      const fetchOath = async () => {
+        if (!manageProp.bbl) {
+          setOathHearings([])
+          return
+        }
+        setOathLoading(true)
+        try {
+          const oathRes = await fetch(`/api/oath_hearings?bbl=${manageProp.bbl}`)
+          const oathData = await oathRes.json()
+          if (oathData.data) {
+            setOathHearings(oathData.data)
+          }
+        } catch (e) {
+          console.error("Error fetching OATH:", e)
+        } finally {
+          setOathLoading(false)
+        }
+      }
+      fetchOath()
+
     } else {
       setPropCityData(null)
+      setOathHearings([])
+      setPropTab('details')
     }
   }, [manageProp])
 
@@ -1976,7 +2008,7 @@ export default function APP_ROOT() {
         <div className="h-16 flex items-center px-6 border-b border-border font-bold text-xl cursor-pointer hover:text-blue-500 transition-colors" onClick={async () => { await supabase.auth.signOut(); setUserRole(null); }}><Building2 className="w-6 h-6 mr-2 text-blue-500" />AssetGuard</div>
 
         {/* MEMBERSHIP BADGE */}
-        {userProfile?.membership_tier && (
+        {userProfile?.membership_tier ? (
           <div className="mx-4 mt-4 px-4 py-3 bg-gradient-to-r from-blue-900/20 to-purple-900/20 rounded-xl border border-blue-500/30 flex items-center justify-between group cursor-pointer hover:border-blue-500/50 transition-all">
             <div>
               <div className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Plan</div>
@@ -1986,10 +2018,20 @@ export default function APP_ROOT() {
             </div>
             <Button size="icon" variant="ghost" className="h-6 w-6 text-gray-400 group-hover:text-white"><Settings className="w-3 h-3" /></Button>
           </div>
+        ) : (
+          <div className="mx-4 mt-4 px-4 py-3 bg-indigo-500/10 rounded-xl border border-indigo-500/20 flex items-center justify-between group cursor-pointer hover:bg-indigo-500/20 transition-all">
+            <div>
+              <div className="text-[10px] text-indigo-400 font-bold uppercase tracking-wider">Plan</div>
+              <div className="text-sm font-bold text-white flex items-center gap-1">
+                Free Tier
+              </div>
+            </div>
+            <Button size="sm" className="bg-indigo-600 hover:bg-indigo-500 text-white text-xs h-7 px-2">Upgrade</Button>
+          </div>
         )}
 
         <nav className="p-4 space-y-2 flex-1">
-          {[{ id: 'dashboard', icon: LayoutDashboard, label: 'Overview' }, { id: 'requests', icon: ClipboardList, label: 'Requests', badge: requests.filter(r => r.status === 'Pending').length }, { id: 'map', icon: MapIcon, label: 'Map' }, { id: 'properties', icon: Building2, label: 'Properties' }, { id: 'll97', icon: Flame, label: 'LL97 Simulator' }, { id: 'contractors', icon: Users, label: 'Pro Network' }, { id: 'settings', icon: Settings, label: 'Settings' }].map(i => (
+          {[{ id: 'dashboard', icon: LayoutDashboard, label: 'Overview' }, { id: 'requests', icon: ClipboardList, label: 'Requests', badge: requests.filter(r => r.status === 'Pending').length }, { id: 'map', icon: MapIcon, label: 'Map' }, { id: 'properties', icon: Building2, label: 'Properties' }, { id: 'calendar', icon: Calendar, label: 'Compliance Calendar' }, { id: 'll97', icon: Flame, label: 'LL97 Simulator' }, { id: 'contractors', icon: Users, label: 'Pro Network' }, { id: 'settings', icon: Settings, label: 'Settings' }].map(i => (
             <button key={i.id} onClick={() => setActiveTab(i.id)} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${activeTab === i.id ? 'bg-primary/10 text-primary shadow-sm shadow-blue-500/10' : 'hover:bg-secondary text-gray-400 hover:text-white'}`}>
               <i.icon className="w-5 h-5" /> {i.label} {i.badge ? <span className="ml-auto bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full shadow-lg shadow-red-500/40">{i.badge}</span> : null}
             </button>
@@ -2076,6 +2118,117 @@ export default function APP_ROOT() {
                   </CardContent>
                 </Card>
               ))}
+            </div>
+          )}
+
+          {/* COMPLIANCE CALENDAR */}
+          {activeTab === 'calendar' && (
+            <div className="space-y-6">
+              <div className="flex justify-between items-start">
+                <div>
+                  <h2 className="text-2xl font-bold flex items-center gap-2"><Calendar className="w-6 h-6 text-blue-500" /> Compliance Calendar</h2>
+                  <p className="text-muted-foreground mt-1">Track key deadlines for all major NYC local laws across your portfolio.</p>
+                </div>
+                {/* Upgrade Placeholder CTA */}
+                {(!userProfile?.membership_tier || userProfile.membership_tier === 'Free') && (
+                  <Button className="bg-indigo-600 hover:bg-indigo-500 text-white gap-2" onClick={() => {
+                    // Dummy handler for upgrade
+                    alert("This will redirect to Stripe Checkout to upgrade your tier to Pro ($29/mo).")
+                  }}>
+                    <ArrowUpCircle className="w-4 h-4" /> Unlock Pro Features
+                  </Button>
+                )}
+              </div>
+
+              {properties.length === 0 ? (
+                <div className="p-8 text-center bg-zinc-900/50 border border-zinc-800 rounded-xl relative overflow-hidden group">
+                  <Flame className="w-12 h-12 mx-auto text-zinc-700 mb-4 group-hover:text-zinc-500 transition-colors" />
+                  <h3 className="text-xl font-bold text-white mb-2">No Properties Found</h3>
+                  <p className="text-gray-400 mb-6">Add a property to start tracking its NYC compliance deadlines (LL97, LL84, LL11, etc.).</p>
+                  <Button className="bg-blue-600 text-white hover:bg-blue-500" onClick={() => setShowAddProperty(true)}>
+                    <Building2 className="w-4 h-4 mr-2" /> Add Your First Property
+                  </Button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {properties.map(p => (
+                    <Card key={p.id} className="bg-card/50 border-zinc-800 flex flex-col">
+                      <CardHeader className="border-b border-zinc-800/50 pb-4 bg-zinc-900/30">
+                        <CardTitle className="text-lg flex items-center justify-between">
+                          <span className="truncate pr-4">{p.address}</span>
+                          <Badge variant="outline" className="shrink-0">{p.units} Units</Badge>
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="p-0 flex-1">
+                        <div className="divide-y divide-zinc-800/50">
+                          {/* LL97 */}
+                          <div className="p-4 flex items-center justify-between hover:bg-zinc-800/30 transition-colors">
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 rounded-full bg-orange-500/20 flex items-center justify-center"><Flame className="w-4 h-4 text-orange-500" /></div>
+                              <div>
+                                <div className="text-sm font-bold">LL97 (Carbon)</div>
+                                <div className="text-xs text-gray-500">Report Due</div>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <div className="text-sm font-bold text-white">May 1, 2025</div>
+                              <Badge variant="default" className="text-[10px] bg-red-500 mt-1">Action Req</Badge>
+                            </div>
+                          </div>
+                          {/* LL84 */}
+                          <div className="p-4 flex items-center justify-between hover:bg-zinc-800/30 transition-colors">
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 rounded-full bg-blue-500/20 flex items-center justify-center"><Zap className="w-4 h-4 text-blue-500" /></div>
+                              <div>
+                                <div className="text-sm font-bold">LL84 (Energy)</div>
+                                <div className="text-xs text-gray-500">Benchmarking</div>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <div className="text-sm font-bold text-white">May 1, 2025</div>
+                              <Badge variant="outline" className="text-[10px] text-orange-400 border-orange-500/50 mt-1">Approaching</Badge>
+                            </div>
+                          </div>
+                          {/* LL11 */}
+                          <div className="p-4 flex items-center justify-between hover:bg-zinc-800/30 transition-colors">
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 rounded-full bg-purple-500/20 flex items-center justify-center"><Building2 className="w-4 h-4 text-purple-500" /></div>
+                              <div>
+                                <div className="text-sm font-bold">LL11 (FISP)</div>
+                                <div className="text-xs text-gray-500">Facade Inspect</div>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <div className="text-sm font-bold text-gray-400">Cycle 10</div>
+                              <Badge variant="outline" className="text-[10px] text-gray-500 border-gray-700 mt-1">Pending Block</Badge>
+                            </div>
+                          </div>
+                          {/* LL152 */}
+                          <div className="p-4 flex items-center justify-between hover:bg-zinc-800/30 transition-colors">
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 rounded-full bg-zinc-700 flex items-center justify-center"><Scale className="w-4 h-4 text-gray-300" /></div>
+                              <div>
+                                <div className="text-sm font-bold">LL152 (Gas)</div>
+                                <div className="text-xs text-gray-500">Piping System</div>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <div className="text-sm font-bold text-gray-400">Dec 31, 2025</div>
+                              <Badge variant="outline" className="text-[10px] text-gray-500 border-gray-700 mt-1">On Track</Badge>
+                            </div>
+                          </div>
+                        </div>
+                      </CardContent>
+                      {(!userProfile?.membership_tier || userProfile.membership_tier === 'Free') && (
+                        <div className="p-4 bg-indigo-500/10 border-t border-indigo-500/20 text-center">
+                          <p className="text-xs text-indigo-300 mb-2">Automated alerts available in Pro.</p>
+                          <Button size="sm" variant="outline" className="w-full border-indigo-500/50 text-indigo-400 hover:bg-indigo-500/20" onClick={() => alert("Upgrade to Pro to unlock automated D-30 and D-7 reminders via Email/SMS.")}>Enable Alerts</Button>
+                        </div>
+                      )}
+                    </Card>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
@@ -2277,44 +2430,191 @@ export default function APP_ROOT() {
         </div>
       </main>
 
-      {/* MODALS */}
-      <AnimatePresence>{showAddProperty && (
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[9999] bg-black/80 flex items-center justify-center p-4">
-          <div className="bg-zinc-900 border border-zinc-700 p-6 rounded-xl w-full max-w-md space-y-4">
-            <h3 className="text-xl font-bold text-white">Add New Property</h3>
-            <div className="relative">
-              <Input
-                placeholder="Search address (e.g. 123 Broadway, NYC)"
-                value={newPropAddr}
-                onChange={e => handleSearchAddress(e.target.value)}
-                className="bg-zinc-800 border-zinc-600 text-white pr-10"
-              />
-              <div className="absolute right-3 top-3 text-gray-400">
-                {isSearching ? <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin"></div> : <Search className="w-4 h-4" />}
+      {/* MANAGE PROPERTY MODAL */}
+      <AnimatePresence>
+        {manageProp && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="bg-zinc-900 border border-zinc-700 rounded-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden shadow-2xl">
+
+              {/* Header */}
+              <div className="p-6 border-b border-zinc-800 flex justify-between items-start bg-zinc-900/50">
+                <div>
+                  <h2 className="text-2xl font-bold text-white flex items-center gap-3">
+                    <Building2 className="w-6 h-6 text-blue-500" /> {manageProp.address}
+                  </h2>
+                  <div className="flex gap-4 mt-2 text-sm text-gray-400">
+                    <span>{manageProp.units} Units</span>
+                    {manageProp.bbl && <span>BBL: {manageProp.bbl}</span>}
+                    {manageProp.bin && <span>BIN: {manageProp.bin}</span>}
+                  </div>
+                </div>
+                <div className="flex items-center gap-4">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="border-zinc-700 text-gray-300 hover:text-white bg-zinc-800/50"
+                    onClick={() => generatePDF({ elementId: 'property-report-content', filename: `${manageProp.address.replace(/\s+/g, '_')}_Report.pdf` })}
+                    disabled={isGeneratingPDF}
+                  >
+                    {isGeneratingPDF ? <div className="w-4 h-4 border-2 border-gray-500 border-t-white rounded-full animate-spin mr-2" /> : <Download className="w-4 h-4 mr-2" />}
+                    {userProfile?.membership_tier === 'Free' ? 'Pro Feature' : 'Download Report'}
+                  </Button>
+                  <button onClick={() => setManageProp(null)} className="text-gray-400 hover:text-white transition-colors"><X className="w-6 h-6" /></button>
+                </div>
               </div>
 
-              {/* Search Results Dropdown */}
-              {searchResults.length > 0 && (
-                <div className="absolute top-full left-0 right-0 mt-2 bg-zinc-800 border border-zinc-700 rounded-lg shadow-xl overflow-hidden z-50 max-h-[200px] overflow-y-auto">
-                  {searchResults.map((result, i) => (
-                    <div
-                      key={i}
-                      onClick={() => selectAddress(result)}
-                      className="p-3 text-sm text-gray-300 hover:bg-zinc-700 cursor-pointer border-b border-zinc-700/50 last:border-0"
-                    >
-                      {result.display_name}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-            {selectedLocation && <div className="text-xs text-green-400 flex items-center gap-1"><CheckCircle className="w-3 h-3" /> Location Identified</div>}
+              {/* Sub-tabs */}
+              <div className="flex px-6 border-b border-zinc-800 bg-zinc-900/30">
+                <button onClick={() => setPropTab('details')} className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${propTab === 'details' ? 'border-blue-500 text-blue-400' : 'border-transparent text-gray-400 hover:text-gray-300'}`}>Overview</button>
+                <button onClick={() => setPropTab('violations')} className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${propTab === 'violations' ? 'border-orange-500 text-orange-400' : 'border-transparent text-gray-400 hover:text-gray-300'}`}>
+                  HPD/DOB Activity {propCityData?.violations?.length > 0 && <span className="bg-orange-500/20 text-orange-400 py-0.5 px-2 rounded-full text-xs">{propCityData.violations.length}</span>}
+                </button>
+                <button onClick={() => setPropTab('oath')} className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${propTab === 'oath' ? 'border-red-500 text-red-400' : 'border-transparent text-gray-400 hover:text-gray-300'}`}>
+                  OATH Hearings {oathHearings.length > 0 && <span className="bg-red-500/20 text-red-400 py-0.5 px-2 rounded-full text-xs">{oathHearings.length}</span>}
+                </button>
+              </div>
 
-            <div className="flex gap-2 justify-end"><Button variant="ghost" onClick={() => setShowAddProperty(false)}>Cancel</Button><Button className="bg-blue-600 text-white" onClick={handleAddProperty} disabled={!newPropAddr}>Add Property</Button></div>
-          </div>
-        </motion.div>
-      )}</AnimatePresence>
+              <div id="property-report-content" className="flex-1 overflow-y-auto p-6 bg-zinc-950/50">
+                {propTab === 'details' && (
+                  <div className="space-y-8">
+                    <div className="grid grid-cols-2 gap-8">
+                      <div className="space-y-6">
+                        <h3 className="text-lg font-bold text-white mb-4">Building Image</h3>
+                        <div className="h-64 flex-shrink-0 relative rounded-xl overflow-hidden border border-zinc-800">
+                          <img
+                            src={`/api/streetview?address=${encodeURIComponent(manageProp.address + ', New York, NY')}`}
+                            crossOrigin="anonymous"
+                            className="absolute inset-0 w-full h-full object-cover"
+                            alt="Building exterior"
+                          />
+                        </div>
+                        <div className="bg-zinc-900 border border-zinc-800 p-4 rounded-xl flex justify-between items-center group cursor-pointer hover:border-zinc-600 transition-colors" onClick={() => { navigator.clipboard.writeText(manageProp.access_code || ''); showToast("Code Copied!") }}>
+                          <div><div className="text-xs text-gray-400 mb-1">Tenant Access Code</div><div className="text-xl font-mono font-bold text-white tracking-widest">{manageProp.access_code || 'N/A'}</div></div>
+                          <ClipboardList className="w-5 h-5 text-gray-600 group-hover:text-white transition-colors" />
+                        </div>
+                      </div>
+                      <div className="space-y-6">
+                        <h3 className="text-lg font-bold text-white mb-4">Live NYC Data Snapshot</h3>
+                        {!propCityData ? (
+                          <div className="flex items-center justify-center h-48 border border-zinc-800 border-dashed rounded-xl bg-zinc-900/50">
+                            <span className="text-gray-500 flex items-center gap-2"><div className="w-4 h-4 border-2 border-gray-600 border-t-white rounded-full animate-spin"></div> Fetching HPD/DOB DB...</span>
+                          </div>
+                        ) : (
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="bg-zinc-900 border border-zinc-800 p-4 rounded-xl">
+                              <div className="text-3xl font-bold text-orange-500 mb-1">{propCityData.violations.length}</div>
+                              <div className="text-xs text-gray-400 uppercase tracking-wider font-bold">Open Violations</div>
+                            </div>
+                            <div className="bg-zinc-900 border border-zinc-800 p-4 rounded-xl">
+                              <div className="text-3xl font-bold text-red-500 mb-1">{oathHearings.length}</div>
+                              <div className="text-xs text-gray-400 uppercase tracking-wider font-bold">OATH Hearings</div>
+                            </div>
+                            <div className="bg-zinc-900 border border-zinc-800 p-4 rounded-xl">
+                              <div className="text-3xl font-bold text-yellow-500 mb-1">{propCityData.complaints.length}</div>
+                              <div className="text-xs text-gray-400 uppercase tracking-wider font-bold">311 Complaints</div>
+                            </div>
+                            <div className="bg-zinc-900 border border-zinc-800 p-4 rounded-xl">
+                              <div className="text-3xl font-bold text-blue-500 mb-1">{propCityData.litigations.length}</div>
+                              <div className="text-xs text-gray-400 uppercase tracking-wider font-bold">Litigations</div>
+                            </div>
+                          </div>
+                        )}
+                        <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white gap-2" onClick={() => { setActiveTab('ll97'); setManageProp(null); runLL97Simulation(manageProp); }} disabled={ll97Loading}>
+                          <Flame className="w-4 h-4" /> Run LL97 Simulation
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {propTab === 'violations' && (
+                  <div className="space-y-6">
+                    <h3 className="text-lg font-bold text-white flex items-center gap-2 border-b border-zinc-800 pb-2"><AlertTriangle className="w-5 h-5 text-orange-500" /> Open Violations ({propCityData?.violations?.length || 0})</h3>
+                    <div className="space-y-3">
+                      {propCityData?.violations?.length > 0 ? propCityData.violations.map((v: any, i: number) => (
+                        <div key={i} className="bg-zinc-950 p-4 rounded-xl border border-zinc-800 hover:border-zinc-700 transition-colors">
+                          <div className="flex justify-between items-start mb-2">
+                            <span className="text-xs font-mono text-gray-500">#{v.violationid}</span>
+                            <Badge variant="outline" className={`text-[10px] shrink-0 ${v.class === 'C' ? 'text-red-500 border-red-500/50' : 'text-orange-500 border-orange-500/50'}`}>Class {v.class}</Badge>
+                          </div>
+                          <p className="text-sm text-gray-300 leading-relaxed">{v.novdescription}</p>
+                        </div>
+                      )) : <div className="text-center py-12 text-zinc-500 border border-zinc-800 border-dashed rounded-xl"><CheckCircle className="w-12 h-12 text-green-500/50 mx-auto mb-3" /><p>No open violations found on HPD.</p></div>}
+                    </div>
+                  </div>
+                )}
+
+                {propTab === 'oath' && (
+                  <div className="space-y-6">
+                    <h3 className="text-lg font-bold text-white flex items-center gap-2 border-b border-zinc-800 pb-2"><Scale className="w-5 h-5 text-red-500" /> OATH Hearings & Penalties</h3>
+
+                    {!manageProp.bbl ? (
+                      <div className="text-center py-12 border border-zinc-800 border-dashed rounded-xl bg-zinc-900/50">
+                        <AlertTriangle className="w-12 h-12 text-yellow-500 mx-auto mb-3" />
+                        <h3 className="text-lg font-bold text-white">BBL Required</h3>
+                        <p className="text-gray-500">Borough, Block, and Lot number is required to look up OATH hearings.</p>
+                      </div>
+                    ) : oathLoading ? (
+                      <div className="flex flex-col items-center justify-center py-12 text-gray-500">
+                        <div className="w-8 h-8 border-4 border-zinc-700 border-t-red-500 rounded-full animate-spin mb-4"></div>
+                        <p>Searching ECB/OATH records...</p>
+                      </div>
+                    ) : oathHearings.length === 0 ? (
+                      <div className="text-center py-12 border border-zinc-800 border-dashed rounded-xl bg-zinc-900/50">
+                        <CheckCircle className="w-12 h-12 text-green-500 mx-auto mb-3" />
+                        <h3 className="text-lg font-bold text-white">No Open OATH Hearings</h3>
+                        <p className="text-gray-500">This property is clear of ECB violations and OATH penalties.</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        {oathHearings.map((h, i) => (
+                          <div key={i} className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 hover:border-zinc-700 transition-colors flex flex-col gap-4">
+                            <div className="flex justify-between items-start">
+                              <div className="flex items-center gap-3">
+                                <Scale className="w-8 h-8 p-1.5 rounded bg-red-500/10 text-red-500" />
+                                <div>
+                                  <h4 className="font-bold text-white text-md">Ticket #{h.id}</h4>
+                                  <p className="text-xs text-gray-400">{h.violation_type} • Severity: {h.severity}</p>
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <div className="text-xl font-bold text-red-400">${h.penalty_balance.toLocaleString()}</div>
+                                <div className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Balance Due</div>
+                              </div>
+                            </div>
+                            <div className="bg-zinc-950 rounded-lg p-3 text-sm text-gray-300 border border-zinc-800/50 leading-relaxed">
+                              {h.description}
+                            </div>
+                            <div className="flex items-center justify-between border-t border-zinc-800 pt-4">
+                              <div className="flex gap-6 text-sm">
+                                <div className="flex items-center gap-2">
+                                  <Calendar className="w-4 h-4 text-gray-500" />
+                                  <span className={!h.hearing_date ? "text-gray-600 italic" : "text-gray-300 font-medium"}>
+                                    {h.hearing_date ? `Hearing: ${new Date(h.hearing_date).toLocaleDateString()}` : 'No Hearing Set'}
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <Activity className="w-4 h-4 text-gray-500" />
+                                  <span className="text-gray-300">{h.ticket_status || 'Status Unknown'}</span>
+                                </div>
+                              </div>
+                              <Button size="sm" variant="outline" className="border-red-500/20 text-red-400 hover:bg-red-500/10" onClick={() => alert("Connecting to Legal Partner integration...")}>
+                                Appeal via Attorney
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
     </div>
   )
 }
+
