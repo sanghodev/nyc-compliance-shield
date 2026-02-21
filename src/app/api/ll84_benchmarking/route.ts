@@ -1,29 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server'
 
 // Fetches Energy and Water Data Disclosure for Local Law 84
-// Dataset: Energy Benchmarking (qb3v-bbre)
+// Dataset: Energy Benchmarking 2022 (usc3-8zwd)
 export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const bbl = searchParams.get('bbl')
-    const bin = searchParams.get('bin')
 
-    if (!bbl && !bin) {
-        return NextResponse.json({ error: 'Missing BBL or BIN parameter' }, { status: 400 })
+    if (!bbl) {
+        return NextResponse.json({ error: 'Missing BBL parameter' }, { status: 400 })
     }
 
-    const apiUrl = 'https://data.cityofnewyork.us/resource/qb3v-bbre.json'
+    const apiUrl = 'https://data.cityofnewyork.us/resource/usc3-8zwd.json'
 
     const params = new URLSearchParams()
 
     // bbl is 10 digits
     if (bbl && /^\d{10}$/.test(bbl)) {
-        params.append('bbl_10_digits', bbl)
-    } else if (bin) {
-        params.append('nyc_borough_block_and_lot_bbl', bin) // Sometimes BIN is mistakenly used, or we fallback
+        params.append('nyc_borough_block_and_lot_bbl', bbl)
+    } else {
+        return NextResponse.json({ error: 'Invalid BBL format' }, { status: 400 })
     }
 
     // Get the most recent reporting years available in the API (order by year)
-    params.append('$order', 'year_ending DESC')
     params.append('$limit', '1')
 
     try {
@@ -40,13 +38,13 @@ export async function GET(request: NextRequest) {
 
         const item = data[0]
 
+        // Map to exact keys found in usc3-8zwd dataset
         const result = {
             energy_star_score: item.energy_star_score || 'N/A',
-            site_eui_kbtu_ft: item.site_eui_kbtu_ft || 'N/A',
-            total_ghg_emissions: item.total_ghg_emissions_metric_tons_co2e || 'N/A',
-            water_use_kgal: item.water_use_all_water_sources_kgal || 'N/A',
-            reporting_year: item.year_ending || 'Unknown',
-            compliance_status: item.compliance_status || 'Unknown'
+            site_eui: item.site_eui_kbtu_ft || 'N/A',
+            ghg_emissions: item.total_ghg_emissions_metric_tons_co2e || 'N/A',
+            water_use: item.metered_areas_water || 'N/A',
+            reporting_year: item.year_ending || 'Unknown'
         }
 
         return NextResponse.json({ data: result })
