@@ -1030,6 +1030,8 @@ export default function APP_ROOT() {
   const [propCityData, setPropCityData] = useState<any>(null) // City Data State
   const [oathHearings, setOathHearings] = useState<any[]>([])
   const [oathLoading, setOathLoading] = useState(false)
+  const [ll84Data, setLl84Data] = useState<any>(null)
+  const [ll84Loading, setLl84Loading] = useState(false)
   const [propTab, setPropTab] = useState<'details' | 'violations' | 'oath'>('details')
 
   // Fetch NYC Open Data
@@ -1141,9 +1143,33 @@ export default function APP_ROOT() {
       }
       fetchOath()
 
+      // Fetch LL84 Benchmarking
+      const fetchLl84 = async () => {
+        if (!manageProp.bbl) {
+          setLl84Data(null)
+          return
+        }
+        setLl84Loading(true)
+        try {
+          const res = await fetch(`/api/ll84_benchmarking?bbl=${manageProp.bbl}`)
+          const json = await res.json()
+          if (json.data) {
+            setLl84Data(json.data)
+          } else {
+            setLl84Data(null)
+          }
+        } catch (e) {
+          console.error("Error fetching LL84:", e)
+        } finally {
+          setLl84Loading(false)
+        }
+      }
+      fetchLl84()
+
     } else {
       setPropCityData(null)
       setOathHearings([])
+      setLl84Data(null)
       setPropTab('details')
     }
   }, [manageProp])
@@ -2519,6 +2545,23 @@ export default function APP_ROOT() {
                             </div>
                           </div>
                         )}
+
+                        {/* LL84 Benchmarking Data */}
+                        <div className="bg-zinc-900 border border-zinc-800 p-5 rounded-xl space-y-3">
+                          <h4 className="text-sm font-bold text-white flex items-center gap-2"><Zap className="w-4 h-4 text-yellow-500" /> LL84 Energy Benchmarking ({ll84Data?.reporting_year || 'Latest'})</h4>
+                          {ll84Loading ? (
+                            <div className="text-sm text-gray-500 flex items-center gap-2"><div className="w-3 h-3 border-2 border-gray-600 border-t-white rounded-full animate-spin"></div> Fetching Benchmarking...</div>
+                          ) : ll84Data ? (
+                            <div className="grid grid-cols-3 gap-4">
+                              <div><div className="text-2xl font-bold text-white">{ll84Data.energy_star_score}</div><div className="text-[10px] text-gray-400 uppercase font-bold tracking-wider">Energy Star Score</div></div>
+                              <div><div className="text-2xl font-bold text-white">{ll84Data.site_eui}</div><div className="text-[10px] text-gray-400 uppercase font-bold tracking-wider">EUI (kBtu/ft²)</div></div>
+                              <div><div className="text-2xl font-bold text-white">{ll84Data.ghg_emissions}</div><div className="text-[10px] text-gray-400 uppercase font-bold tracking-wider">GHG Emissions</div></div>
+                            </div>
+                          ) : (
+                            <div className="text-sm text-gray-500">No recent benchmarking data found for this property's BBL.</div>
+                          )}
+                        </div>
+
                         <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white gap-2" onClick={() => { setActiveTab('ll97'); setManageProp(null); runLL97Simulation(manageProp); }} disabled={ll97Loading}>
                           <Flame className="w-4 h-4" /> Run LL97 Simulation
                         </Button>
