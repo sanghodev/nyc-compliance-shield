@@ -1490,6 +1490,30 @@ export default function APP_ROOT() {
     }
   }
 
+  // LOGIC: Confirm Add Property
+  const submitAddProperty = () => {
+    if (!newPropAddr) {
+      showToast("Please enter an address.", "info")
+      return
+    }
+    const newPropObj: Property = {
+      id: Date.now(),
+      address: newPropAddr,
+      borough: "Manhattan",
+      units: Math.floor(Math.random() * 50) + 1,
+      status: "Good",
+      violations: 0,
+      lat: searchResults[0]?.lat ? parseFloat(searchResults[0].lat) : 40.7128,
+      lng: searchResults[0]?.lon ? parseFloat(searchResults[0].lon) : -74.0060,
+      image: `https://source.unsplash.com/random/400x300/?building,newyork,${Date.now()}`
+    }
+    setProperties([...properties, newPropObj])
+    setShowAddProperty(false)
+    setNewPropAddr("")
+    setSearchResults([])
+    showToast("Property successfully added to your portfolio!")
+  }
+
   // LOGIC: Select Address
   const selectAddress = (result: SearchResult) => {
     setNewPropAddr(result.display_name.split(',')[0]) // Keep it short for display
@@ -2651,6 +2675,84 @@ export default function APP_ROOT() {
                     )}
                   </div>
                 )}
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ADD PROPERTY MODAL */}
+      <AnimatePresence>
+        {showAddProperty && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center p-4">
+            <div className="bg-zinc-900 border border-zinc-700 p-6 rounded-xl w-full max-w-md space-y-4 shadow-2xl">
+              <div className="flex justify-between items-center mb-2">
+                <h3 className="text-xl font-bold text-white flex items-center gap-2"><Building2 className="w-5 h-5 text-blue-500" /> Add Property</h3>
+                <button onClick={() => setShowAddProperty(false)} className="text-gray-400 hover:text-white"><X className="w-5 h-5" /></button>
+              </div>
+              <div className="space-y-4">
+                <div>
+                  <label className="text-xs text-gray-400 mb-1 block">Property Address</label>
+                  <Input placeholder="Enter NYC Address..." value={newPropAddr} onChange={(e) => handleSearchAddress(e.target.value)} className="bg-zinc-800 border-zinc-600 text-white" />
+                  {isSearching && <p className="text-xs text-blue-400 mt-1">Searching...</p>}
+                  {searchResults.length > 0 && (
+                    <div className="mt-2 bg-zinc-800 border border-zinc-700 rounded-md overflow-hidden text-sm">
+                      {searchResults.slice(0, 3).map((res, i) => (
+                        <div key={i} className="p-2 hover:bg-zinc-700 cursor-pointer text-gray-300" onClick={() => { setNewPropAddr(res.display_name.split(',')[0]); setSearchResults([]); }}>
+                          {res.display_name.split(',')[0]}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div className="flex justify-end gap-2 pt-4 border-t border-zinc-800">
+                <Button variant="ghost" onClick={() => setShowAddProperty(false)}>Cancel</Button>
+                <Button className="bg-blue-600 hover:bg-blue-500 text-white" onClick={submitAddProperty} disabled={!newPropAddr}>Register Property</Button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* MANAGE REQUEST MODAL */}
+      <AnimatePresence>
+        {selectedRequest && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center p-4">
+            <div className="bg-zinc-900 border border-zinc-700 rounded-xl w-full max-w-lg space-y-6 shadow-2xl p-6">
+              <div className="flex justify-between items-start">
+                <div>
+                  <h3 className="text-xl font-bold text-white flex items-center gap-2">{selectedRequest.issue}</h3>
+                  <p className="text-sm text-gray-400">Requested by {selectedRequest.tenantName || 'Tenant'} • Unit {selectedRequest.unit}</p>
+                </div>
+                <Badge className={`${selectedRequest.status === 'Pending' ? 'bg-orange-500' : selectedRequest.status === 'Resolved' ? 'bg-green-500' : 'bg-blue-500'} ml-2`}>{selectedRequest.status}</Badge>
+              </div>
+
+              <div className="bg-zinc-950 p-4 rounded-md border border-zinc-800 text-sm text-gray-300">
+                <strong>Description:</strong><br />
+                {selectedRequest.desc || selectedRequest.description || 'No description provided.'}
+              </div>
+
+              <div className="space-y-4 border-t border-zinc-800 pt-4">
+                <h4 className="text-sm font-bold text-white">Action</h4>
+                {selectedRequest.status !== 'Resolved' && (
+                  <Button className="w-full bg-green-600 hover:bg-green-500 text-white mb-2" onClick={() => {
+                    setRequests(requests.map(r => r.id === selectedRequest.id ? { ...r, status: 'Resolved' } : r));
+                    setSelectedRequest(null);
+                    showToast("Request marked as resolved.");
+                  }}>
+                    <CheckCircle className="w-4 h-4 mr-2" /> Mark as Resolved
+                  </Button>
+                )}
+                {selectedRequest.status === 'Pending' && (
+                  <Button variant="outline" className="w-full border-blue-500/50 text-blue-400 hover:bg-blue-500/10" onClick={() => alert("Vendor matching feature coming in Phase 3.")}>
+                    Assign Vendor
+                  </Button>
+                )}
+              </div>
+
+              <div className="flex justify-end pt-2">
+                <Button variant="ghost" className="text-gray-400 hover:text-white" onClick={() => setSelectedRequest(null)}>Close</Button>
               </div>
             </div>
           </motion.div>
