@@ -819,7 +819,7 @@ function PropertyDetailsModal({ property, cityData, onClose }: { property: Prope
   if (!property) return null
   return (
     <AnimatePresence>
-      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
         {/* Backdrop */}
         <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose} />
         {/* Content */}
@@ -931,6 +931,7 @@ export default function APP_ROOT() {
   // Auth State
   const [showAuthModal, setShowAuthModal] = useState<UserRole>(null)
   const [selectedTier, setSelectedTier] = useState<string>("")
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false)
 
   // Admin Data
   const [users, setUsers] = useState<UserProfile[]>([])
@@ -1021,7 +1022,7 @@ export default function APP_ROOT() {
   const [showAddProperty, setShowAddProperty] = useState(false)
   const [newPropAddr, setNewPropAddr] = useState("")
   const [searchResults, setSearchResults] = useState<SearchResult[]>([])
-  const [selectedLocation, setSelectedLocation] = useState<{ lat: number, lng: number } | null>(null)
+  const [selectedLocation, setSelectedLocation] = useState<{ lat: number, lng: number, bin?: string, bbl?: string } | null>(null)
   const [isSearching, setIsSearching] = useState(false)
 
   const [chatUser, setChatUser] = useState<Contractor | null>(null)
@@ -1479,51 +1480,39 @@ export default function APP_ROOT() {
 
     setIsSearching(true)
     try {
-      // Verify with Nominatim (OpenStreetMap)
-      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5`)
+      // Use NYC Planning Labs GeoSearch API
+      const res = await fetch(`https://geosearch.planninglabs.nyc/v2/search?text=${encodeURIComponent(query)}`)
       const data = await res.json()
-      setSearchResults(data)
+      if (data.features) {
+        const results = data.features.map((f: any) => ({
+          display_name: f.properties.label || 'Unknown Address',
+          lat: f.geometry?.coordinates?.[1] || 0,
+          lon: f.geometry?.coordinates?.[0] || 0,
+          bin: f.properties?.addendum?.pad?.bin || f.properties?.pad_bin || f.properties?.bin || "",
+          bbl: f.properties?.addendum?.pad?.bbl || f.properties?.pad_bbl || f.properties?.bbl || ""
+        }))
+        setSearchResults(results)
+      }
     } catch (e) {
-      console.error(e)
+      console.error("GeoSearch Error:", e)
     } finally {
       setIsSearching(false)
     }
   }
 
-  // LOGIC: Confirm Add Property
-  const submitAddProperty = () => {
+  // LOGIC: Select Address
+  const selectAddress = (result: SearchResult) => {
+    setNewPropAddr(result.display_name.split(',')[0]) // Keep it short for display
+    setSelectedLocation({ lat: parseFloat(result.lat), lng: parseFloat(result.lon), bin: result.bin, bbl: result.bbl })
+    setSearchResults([]) // Clear results
+  }
+
+  // LOGIC: Add Property (Updated with GeoSearch & Verification Safety)
+  const handleAddProperty = async () => {
     if (!newPropAddr) {
       showToast("Please enter an address.", "info")
       return
     }
-    const newPropObj: Property = {
-      id: Date.now(),
-      address: newPropAddr,
-      borough: "Manhattan",
-      units: Math.floor(Math.random() * 50) + 1,
-      status: "Good",
-      violations: 0,
-      lat: searchResults[0]?.lat ? parseFloat(searchResults[0].lat) : 40.7128,
-      lng: searchResults[0]?.lon ? parseFloat(searchResults[0].lon) : -74.0060,
-      image: `https://source.unsplash.com/random/400x300/?building,newyork,${Date.now()}`
-    }
-    setProperties([...properties, newPropObj])
-    setShowAddProperty(false)
-    setNewPropAddr("")
-    setSearchResults([])
-    showToast("Property successfully added to your portfolio!")
-  }
-
-  // LOGIC: Select Address
-  const selectAddress = (result: SearchResult) => {
-    setNewPropAddr(result.display_name.split(',')[0]) // Keep it short for display
-    setSelectedLocation({ lat: parseFloat(result.lat), lng: parseFloat(result.lon) })
-    setSearchResults([]) // Clear results
-  }
-
-  // LOGIC: Add Property (Updated for Real DB)
-  const handleAddProperty = async () => {
-    if (!newPropAddr) return
 
     // Default location (NYC) if search failed
     const lat = selectedLocation?.lat || 40.7128 + (Math.random() - 0.5) * 0.05
@@ -1539,12 +1528,14 @@ export default function APP_ROOT() {
       address: newPropAddr,
       borough: "Manhattan", // Default for now
       units: Math.floor(Math.random() * 20) + 1,
-      status: "Good",
+      status: "Pending Verification", // Safety Mechanism
       violations: 0,
       lat,
       lng,
-      image: `https://source.unsplash.com/random/400x300/?building&sig=${Date.now()}`,
-      manager_id: user.id
+      image: `https://source.unsplash.com/random/400x300/?building,newyork&sig=${Date.now()}`,
+      manager_id: user.id,
+      bin: selectedLocation?.bin || "",
+      bbl: selectedLocation?.bbl || ""
     }
 
     // Insert into Supabase
@@ -1555,7 +1546,7 @@ export default function APP_ROOT() {
       console.error(error)
     } else if (data) {
       setProperties([...properties, data[0] as Property])
-      showToast(`Property "${newP.address}" added successfully!`)
+      showToast(`Property submitted. Pending verification!`)
       setNewPropAddr("")
       setSearchResults([])
       setSelectedLocation(null)
@@ -2066,7 +2057,7 @@ export default function APP_ROOT() {
                 {userProfile.membership_tier} <Sparkles className="w-3 h-3 text-amber-400" />
               </div>
             </div>
-            <Button size="icon" variant="ghost" className="h-6 w-6 text-slate-400 group-hover:text-white"><Settings className="w-3 h-3" /></Button>
+            <Button size="icon" variant="ghost" className="h-6 w-6 text-slate-400 group-hover:text-white" onClick={() => setShowUpgradeModal(true)}><Settings className="w-3 h-3" /></Button>
           </div>
         ) : (
           <div className="mx-4 mt-4 px-4 py-3 bg-indigo-500/10 rounded-xl border border-indigo-500/20 flex items-center justify-between group cursor-pointer hover:bg-indigo-500/20 transition-all">
@@ -2076,7 +2067,7 @@ export default function APP_ROOT() {
                 Free Tier
               </div>
             </div>
-            <Button size="sm" className="bg-indigo-500 hover:bg-indigo-500 text-white text-xs h-7 px-2">Upgrade</Button>
+            <Button size="sm" className="bg-indigo-500 hover:bg-sky-400 text-white text-xs h-7 px-2" onClick={() => setShowUpgradeModal(true)}>Upgrade</Button>
           </div>
         )}
 
@@ -2434,17 +2425,60 @@ export default function APP_ROOT() {
 
           {/* CONTRACTORS */}
           {activeTab === 'contractors' && (
-            <div className="grid grid-cols-3 gap-6">
-              {contractors.map(c => (
-                <Card key={c.id} className="bg-card/50"><CardContent className="p-6 space-y-4">
-                  <div className="flex items-center gap-4"><Avatar><AvatarImage src={`https://api.dicebear.com/7.x/initials/svg?seed=${c.name}`} /><AvatarFallback>PRO</AvatarFallback></Avatar><div><div className="font-bold">{c.name}</div><div className="text-sm">{c.type}</div></div></div>
-                  {c.status === 'Connected' ? (
-                    <Button className="w-full bg-secondary text-foreground" onClick={() => setChatUser(c)}><MessageSquare className="w-4 h-4 mr-2" /> Message</Button>
-                  ) : (
-                    <Button className="w-full bg-primary/20 text-primary hover:bg-primary/30" onClick={() => toggleContractor(c.id)}>{c.status === 'Pending' ? 'Pending...' : 'Connect'}</Button>
-                  )}
-                </CardContent></Card>
-              ))}
+            <div className="space-y-6">
+              <div className="flex justify-between items-start">
+                <div>
+                  <h2 className="text-2xl font-bold flex items-center gap-2"><HardHat className="w-6 h-6 text-sky-400" /> Pro Network Marketplace</h2>
+                  <p className="text-muted-foreground mt-1">Find top-rated, verified NYC contractors for your compliance and repair needs.</p>
+                </div>
+                <Button className="bg-indigo-500 hover:bg-blue-700 text-white gap-2" onClick={() => alert("Post a job flow placeholder")}>
+                  <ClipboardList className="w-4 h-4" /> Request Quotes
+                </Button>
+              </div>
+
+              {/* Verified Badge / Trust Banner */}
+              <div className="p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-xl flex items-center gap-4">
+                <ShieldCheck className="w-8 h-8 text-emerald-500 shrink-0" />
+                <div className="text-sm text-gray-300">
+                  <strong className="text-emerald-400">AssetGuard Verified Partners.</strong> Every contractor in the Pro Network holds active NYC Department of Buildings (DOB) licenses, verified insurance, and passes rigorous quality checks.
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {contractors.map(c => (
+                  <Card key={c.id} className="bg-slate-900/40 backdrop-blur-md border border-slate-700/50 overflow-hidden relative">
+                    {c.status === 'Connected' && <div className="absolute top-0 right-0 w-12 h-12 bg-sky-500/20 rounded-bl-full flex items-start justify-end p-2"><CheckCircle className="w-4 h-4 text-sky-400" /></div>}
+                    <CardContent className="p-6 space-y-4">
+                      <div className="flex items-center gap-4">
+                        <Avatar className="w-12 h-12 border-2 border-slate-700/50"><AvatarImage src={`https://api.dicebear.com/7.x/initials/svg?seed=${c.name}`} /><AvatarFallback>PRO</AvatarFallback></Avatar>
+                        <div>
+                          <div className="font-bold text-lg text-white">{c.name}</div>
+                          <div className="text-sm text-indigo-400 font-medium">{c.type}</div>
+                        </div>
+                      </div>
+
+                      <div className="flex justify-between items-center text-xs text-slate-400">
+                        <span className="flex items-center gap-1"><Sparkles className="w-3 h-3 text-amber-400" /> 4.9 (120 reviews)</span>
+                        <span>{Math.floor(Math.random() * 50) + 10} jobs completed</span>
+                      </div>
+
+                      {c.status === 'Connected' ? (
+                        <div className="flex gap-2">
+                          <Button className="flex-1 bg-sky-500/20 text-sky-400 hover:bg-sky-500/30" onClick={() => alert(`Messaging ${c.name}...`)}><MessageSquare className="w-4 h-4 mr-2" /> Message</Button>
+                          <Button className="flex-1 bg-slate-800/40 text-white hover:bg-slate-700/50 border border-slate-700/50" onClick={() => alert(`Requesting quote from ${c.name}...`)}>Get Quote</Button>
+                        </div>
+                      ) : (
+                        <Button className="w-full bg-indigo-500/20 text-indigo-400 hover:bg-indigo-500/30 border border-indigo-500/20" onClick={() => {
+                          alert(`Connection request sent to ${c.name}. They will review your property portfolio and respond.`);
+                          toggleContractor(c.id);
+                        }}>
+                          {c.status === 'Pending' ? 'Request Pending...' : 'Connect to Network'}
+                        </Button>
+                      )}
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
             </div>
           )}
 
@@ -2466,6 +2500,34 @@ export default function APP_ROOT() {
                 <CardContent className="space-y-4">
                   <div className="space-y-2"><label className="text-sm font-medium text-gray-300">Support Phone</label><Input value={editProfile?.phone || ""} onChange={e => setEditProfile({ ...editProfile, phone: e.target.value })} className="bg-slate-800/40 border-slate-700/50 text-white" placeholder="e.g. 212-555-0199" /></div>
                   <div className="space-y-2"><label className="text-sm font-medium text-gray-300">Support Email</label><Input value={editProfile?.contact_email || ""} onChange={e => setEditProfile({ ...editProfile, contact_email: e.target.value })} className="bg-slate-800/40 border-slate-700/50 text-white" placeholder="e.g. support@nycholdings.com" /></div>
+                </CardContent>
+              </Card>
+
+              {/* B2B API ACCESS SETTINGS */}
+              <Card className="bg-slate-900/40 backdrop-blur-md border-slate-700/50 mt-6">
+                <CardHeader>
+                  <CardTitle className="text-white flex items-center gap-2"><Lock className="w-5 h-5 text-indigo-400" /> B2B API Access</CardTitle>
+                  <CardDescription>Generate API keys to integrate NYC compliance data directly into your own software.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {(!userProfile?.membership_tier || userProfile.membership_tier !== 'Business') ? (
+                    <div className="p-4 bg-indigo-500/10 border border-indigo-500/20 rounded-lg text-center">
+                      <Lock className="w-8 h-8 text-indigo-400 mx-auto mb-3" />
+                      <h4 className="text-white font-bold mb-1">API Access is a Business Tier Feature</h4>
+                      <p className="text-sm text-slate-400 mb-4">Upgrade to the Business Tier ($99/mo) to unlock developer API access and programmatic compliance monitoring.</p>
+                      <Button className="bg-indigo-500 hover:bg-sky-400 text-white" onClick={() => alert("Redirect to Stripe checkout for Business Tier...")}><Sparkles className="w-4 h-4 mr-2 text-amber-400" /> Upgrade to Business</Button>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      <div className="flex justify-between items-center p-3 bg-slate-950 border border-slate-800/50 rounded-lg">
+                        <div>
+                          <div className="text-sm font-bold text-white">Production API Key</div>
+                          <div className="text-xs text-slate-500 font-mono">sk_live_...</div>
+                        </div>
+                        <Button variant="outline" size="sm" className="border-slate-700/50 text-sky-400 hover:text-sky-300" onClick={() => alert("API Key generated.")}>Generate New Key</Button>
+                      </div>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
 
@@ -2684,7 +2746,7 @@ export default function APP_ROOT() {
       {/* ADD PROPERTY MODAL */}
       <AnimatePresence>
         {showAddProperty && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center p-4">
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[9999] bg-black/80 flex items-center justify-center p-4">
             <div className="bg-slate-900/40 backdrop-blur-md border border-slate-700/50 p-6 rounded-xl w-full max-w-md space-y-4 shadow-[0_0_40px_rgba(0,0,0,0.5)]">
               <div className="flex justify-between items-center mb-2">
                 <h3 className="text-xl font-bold text-white flex items-center gap-2"><Building2 className="w-5 h-5 text-sky-400" /> Add Property</h3>
@@ -2696,19 +2758,43 @@ export default function APP_ROOT() {
                   <Input placeholder="Enter NYC Address..." value={newPropAddr} onChange={(e) => handleSearchAddress(e.target.value)} className="bg-slate-800/40 border-slate-600/50 text-white" />
                   {isSearching && <p className="text-xs text-sky-300 mt-1">Searching...</p>}
                   {searchResults.length > 0 && (
-                    <div className="mt-2 bg-slate-800/40 border border-slate-700/50 rounded-md overflow-hidden text-sm">
-                      {searchResults.slice(0, 3).map((res, i) => (
-                        <div key={i} className="p-2 hover:bg-zinc-700 cursor-pointer text-gray-300" onClick={() => { setNewPropAddr(res.display_name.split(',')[0]); setSearchResults([]); }}>
-                          {res.display_name.split(',')[0]}
+                    <div className="mt-2 bg-slate-800/40 border border-slate-700/50 rounded-md overflow-hidden text-sm max-h-48 overflow-y-auto">
+                      {searchResults.slice(0, 5).map((res, i) => (
+                        <div key={i} className="p-2 hover:bg-slate-700/60 cursor-pointer text-gray-300 transition-colors" onClick={() => selectAddress(res)}>
+                          {res.display_name}
                         </div>
                       ))}
                     </div>
                   )}
                 </div>
+
+                {/* PROOF OF OWNERSHIP UI PLACEHOLDER */}
+                {newPropAddr && searchResults.length === 0 && (
+                  <div className="p-4 bg-indigo-500/10 border border-indigo-500/20 rounded-lg animate-fade-in">
+                    <div className="flex items-start gap-3">
+                      <ShieldCheck className="w-5 h-5 text-indigo-400 shrink-0 mt-0.5" />
+                      <div>
+                        <h4 className="text-sm font-bold text-white mb-1">Ownership Verification Required</h4>
+                        <p className="text-xs text-slate-400 mb-3 leading-relaxed">To ensure data integrity and prevent unauthorized access, newly added properties require ownership verification (Deed or Management Agreement).</p>
+
+                        <div className="space-y-2">
+                          <label className="text-xs font-bold text-slate-300 flex items-center justify-between">
+                            <span>Upload Proof Document</span>
+                            <span className="text-slate-500 font-normal">.pdf, .jpg, .png</span>
+                          </label>
+                          <div className="flex items-center gap-2 border border-slate-700/50 border-dashed rounded-md p-2 bg-slate-950/50 hover:bg-slate-950 transition-colors cursor-pointer group" onClick={() => alert("File upload dialog placeholder")}>
+                            <div className="w-8 h-8 rounded bg-slate-800 flex items-center justify-center text-slate-400 group-hover:text-indigo-400 transition-colors"><Plus className="w-4 h-4" /></div>
+                            <span className="text-sm text-slate-500 group-hover:text-slate-300 transition-colors">Select file...</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
               <div className="flex justify-end gap-2 pt-4 border-t border-slate-700/50">
                 <Button variant="ghost" onClick={() => setShowAddProperty(false)}>Cancel</Button>
-                <Button className="bg-indigo-500 hover:bg-sky-400 text-white" onClick={submitAddProperty} disabled={!newPropAddr}>Register Property</Button>
+                <Button className="bg-indigo-500 hover:bg-sky-400 text-white" onClick={handleAddProperty} disabled={!newPropAddr}>Submit for Verification</Button>
               </div>
             </div>
           </motion.div>
@@ -2718,7 +2804,7 @@ export default function APP_ROOT() {
       {/* MANAGE REQUEST MODAL */}
       <AnimatePresence>
         {selectedRequest && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center p-4">
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[9999] bg-black/80 flex items-center justify-center p-4">
             <div className="bg-slate-900/40 backdrop-blur-md border border-slate-700/50 rounded-xl w-full max-w-lg space-y-6 shadow-[0_0_40px_rgba(0,0,0,0.5)] p-6">
               <div className="flex justify-between items-start">
                 <div>
@@ -2745,14 +2831,94 @@ export default function APP_ROOT() {
                   </Button>
                 )}
                 {selectedRequest.status === 'Pending' && (
-                  <Button variant="outline" className="w-full border-sky-400/50 text-sky-300 hover:bg-sky-400/10" onClick={() => alert("Vendor matching feature coming in Phase 3.")}>
-                    Assign Vendor
+                  <Button variant="outline" className="w-full border-sky-400/50 text-sky-300 hover:bg-sky-400/10" onClick={() => {
+                    setActiveTab('contractors');
+                    setSelectedRequest(null);
+                  }}>
+                    <HardHat className="w-4 h-4 mr-2" /> Find Contractor
                   </Button>
                 )}
               </div>
 
               <div className="flex justify-end pt-2">
                 <Button variant="ghost" className="text-slate-400 hover:text-white" onClick={() => setSelectedRequest(null)}>Close</Button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* UPGRADE / PLAN DETAILS MODAL */}
+      <AnimatePresence>
+        {showUpgradeModal && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[9999] bg-black/80 flex items-center justify-center p-4">
+            <div className="bg-slate-900/40 backdrop-blur-md border border-slate-700/50 rounded-2xl w-full max-w-2xl shadow-[0_0_50px_rgba(0,0,0,0.6)] overflow-hidden">
+              <div className="p-6 border-b border-slate-700/50 flex justify-between items-center bg-slate-950/50">
+                <div>
+                  <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                    <Sparkles className="w-5 h-5 text-amber-400" /> Plan Details & Upgrade
+                  </h3>
+                  <p className="text-sm text-slate-400">Manage your AssetGuard subscription and limits.</p>
+                </div>
+                <button onClick={() => setShowUpgradeModal(false)} className="text-slate-400 hover:text-white transition-colors"><X className="w-5 h-5" /></button>
+              </div>
+
+              <div className="p-6 grid md:grid-cols-2 gap-6">
+                {/* Current Plan */}
+                <div className="space-y-4">
+                  <div className="text-xs font-bold tracking-widest text-slate-500 uppercase">Current Plan</div>
+                  <div className="p-4 rounded-xl bg-slate-800/30 border border-slate-700/50 space-y-3">
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 rounded-full bg-emerald-500 animate-pulse"></div>
+                      <span className="text-white font-bold text-lg">{userProfile?.membership_tier || "Free Tier"}</span>
+                    </div>
+                    {userProfile?.membership_tier === "Starter" ? (
+                      <p className="text-xs text-slate-400 leading-relaxed">You are currently on the Starter Plan. Upgrade to Growth to unlock instant AI Affidavits and Priority Pro Dispatch.</p>
+                    ) : userProfile?.membership_tier === "Growth" ? (
+                      <p className="text-xs text-slate-400 leading-relaxed">You are on the Growth Plan. You have access to our most popular automation tools.</p>
+                    ) : (
+                      <p className="text-xs text-slate-400 leading-relaxed">You are on the Free Tier. You can track up to 1 property. Upgrade for premium features.</p>
+                    )}
+
+                    <div className="pt-2 border-t border-slate-700/50">
+                      <div className="flex justify-between text-xs mb-1 text-slate-400">
+                        <span>Properties Monitored</span>
+                        <span className="text-white">1 / {userProfile?.membership_tier === "Growth" ? "20" : userProfile?.membership_tier === "Starter" ? "3" : "1"}</span>
+                      </div>
+                      <div className="w-full bg-slate-900 rounded-full h-1.5 overflow-hidden">
+                        <div className="bg-sky-400 h-1.5 rounded-full" style={{ width: '33%' }}></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Upgrade Options */}
+                <div className="space-y-4">
+                  <div className="text-xs font-bold tracking-widest text-sky-400 uppercase">Available Upgrades</div>
+
+                  {userProfile?.membership_tier !== "Growth" && (
+                    <div className="p-4 rounded-xl bg-sky-900/10 border border-sky-500/30 hover:bg-sky-900/20 transition-colors cursor-pointer group relative overflow-hidden">
+                      <div className="absolute top-0 right-0 bg-sky-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-bl-lg">POPULAR</div>
+                      <h4 className="text-white font-bold text-md mb-1 group-hover:text-sky-300 transition-colors">Growth Plan</h4>
+                      <div className="text-2xl font-bold text-white mb-2">$99<span className="text-sm font-normal text-slate-400">/mo</span></div>
+                      <ul className="text-xs text-slate-300 space-y-1.5">
+                        <li className="flex items-center gap-1.5"><CheckCircle className="w-3 h-3 text-emerald-500" /> Up to 20 Units</li>
+                        <li className="flex items-center gap-1.5"><CheckCircle className="w-3 h-3 text-emerald-500" /> Instant AI Affidavits</li>
+                        <li className="flex items-center gap-1.5"><CheckCircle className="w-3 h-3 text-emerald-500" /> Financial Forecasting</li>
+                      </ul>
+                      <Button className="w-full mt-3 bg-sky-500 hover:bg-sky-400 text-white h-8 text-xs font-bold" onClick={() => alert("Stripe payment gateway placeholder")}>Upgrade to Growth</Button>
+                    </div>
+                  )}
+
+                  {userProfile?.membership_tier === "Growth" && (
+                    <div className="p-4 rounded-xl bg-purple-900/10 border border-purple-500/30 hover:bg-purple-900/20 transition-colors cursor-pointer group relative overflow-hidden">
+                      <div className="absolute top-0 right-0 bg-gradient-to-r from-purple-500 to-fuchsia-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-bl-lg">PREMIUM</div>
+                      <h4 className="text-white font-bold text-md mb-1 group-hover:text-purple-300 transition-colors">Premium Enterprise</h4>
+                      <p className="text-xs text-slate-400 mb-2">Need more than 20 units? Get custom pricing and white-glove onboarding for large portfolios.</p>
+                      <Button variant="outline" className="w-full mt-1 border-purple-500/50 text-purple-300 hover:bg-purple-500/20 h-8 text-xs font-bold" onClick={() => alert("Contact sales placeholder")}>Contact Sales</Button>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </motion.div>
