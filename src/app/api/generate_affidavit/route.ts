@@ -1,53 +1,63 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { GoogleGenAI } from '@google/genai'
+import { NextResponse } from 'next/server';
+import { GoogleGenAI } from '@google/genai';
 
-export async function POST(request: NextRequest) {
-    const apiKey = process.env.GEMINI_API_KEY
+export async function POST(req: Request) {
+    const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
-        return NextResponse.json({ error: 'Document generation service is temporarily unavailable' }, { status: 500 })
+        return NextResponse.json({ error: 'GEMINI_API_KEY is not set' }, { status: 500 });
     }
 
-    const ai = new GoogleGenAI({ apiKey })
+    const ai = new GoogleGenAI({ apiKey });
 
-    let body: any
     try {
-        body = await request.json()
-    } catch {
-        return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
-    }
+        const body = await req.json();
+        const { property, violation } = body;
 
-    const { violation_details, correction_details, date_corrected } = body
+        if (!property || !violation) {
+            return NextResponse.json({ error: 'Missing property or violation details' }, { status: 400 });
+        }
 
-    if (!violation_details || !correction_details) {
-        return NextResponse.json({ error: 'Missing details' }, { status: 400 })
-    }
+        const prompt = `
+You are an expert NYC real estate attorney.
+Your task is to draft a formal "Affidavit of Compliance" (or Certificate of Correction) for a property owner to submit to the NYC Department of Buildings (DOB) or Housing Preservation and Development (HPD).
 
-    const prompt = `
-You are an NYC Housing Attorney ("The Writer").
-Draft a formal "Sworn Statement of Correction" (Affidavit) for the following HPD/DOB violation.
-This text will be used in an official Certification of Correction form.
+Context:
+Property Address: ${property.address}, NY
+BIN: ${property.bin || 'N/A'}
+BBL: ${property.bbl || 'N/A'}
 
-Violation Data:
-${JSON.stringify(violation_details, null, 2)}
-
-Correction Performed:
-"${correction_details}" on date ${date_corrected}
+Violation Details:
+Description: ${violation.description || violation.issue || 'N/A'}
+Violation Number/ID: ${violation.id || 'N/A'}
+Issued Date: ${violation.date || 'N/A'}
+Class: ${violation.class || 'N/A'}
 
 Requirements:
-1. Use formal legal language suitable for NYC HPD agencies.
-2. State clearly that the violation has been corrected in compliance with the Housing Maintenance Code.
-3. Include a placeholder for the Owner/Agent's signature.
-4. Output ONLY the text of the affidavit, no markdown formatting or intro text.
-`
+1. The affidavit must be written in formal legal english, ready to be signed and notarized.
+2. It should state that the owner (or authorized agent) has inspected the premises, hired a certified contractor, and that the specified violation has been completely corrected in accordance with all applicable NYC administrative codes.
+3. Format the output strictly as clean, semantic HTML that can be rendered inside a web page. Use tags like <h1>, <h2>, <p>, <br/>, and <strong> for formatting.
+4. Do NOT wrap the output in markdown \`\`\`html code blocks. Return ONLY the raw HTML string.
+5. Include a formal signature block at the bottom for "Owner/Agent Signature", "Print Name", "Date", and a "Notary Public" section.
+`;
 
-    try {
         const response = await ai.models.generateContent({
-            model: 'gemini-2.0-flash',
+            model: 'gemini-2.5-flash',
             contents: prompt,
-        })
+            config: {
+                temperature: 0.2, // Low temperature for more formal/predictable legal text
+            }
+        });
 
-        return NextResponse.json({ affidavit: response.text })
-    } catch (e: any) {
-        return NextResponse.json({ error: e.message }, { status: 500 })
+        const generatedHtml = response.text || '';
+        const cleanHtml = generatedHtml.replace(/^```(html)?\n*/i, '').replace(/\n*```$/i, '').trim();
+
+        return NextResponse.json({ affidavitHtml: cleanHtml });
+
+    } catch (error: any) {
+        console.error('Error generating affidavit:', error);
+        return NextResponse.json(
+            { error: 'Failed to generate affidavit', details: error.message },
+            { status: 500 }
+        );
     }
 }

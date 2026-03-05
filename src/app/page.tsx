@@ -25,6 +25,7 @@ const MapViewer = dynamic(() => import('@/components/MapViewer'), { ssr: false }
 import { supabase } from "@/lib/supabaseClient"
 import { AuthModal } from "@/components/AuthModal"
 import { useGeneratePDF } from "@/hooks/useGeneratePDF"
+import AffidavitTemplate from "@/components/AffidavitTemplate"
 
 // --- Types ---
 type UserRole = "manager" | "tenant" | "admin" | "contractor" | null
@@ -716,7 +717,7 @@ function TenantDashboard({ onLogout, onRequestSubmit }: { onLogout: () => void, 
 }
 
 // --- VIOLATION ITEM COMPONENT (AI INSIGHT) ---
-function ViolationItem({ v }: { v: any }) {
+function ViolationItem({ v, onGenerateAffidavit, isGenerating }: { v: any, onGenerateAffidavit?: (v: any) => void, isGenerating?: boolean }) {
   const [expanded, setExpanded] = useState(false)
 
   // Simple AI Insight Logic (Mock)
@@ -804,9 +805,16 @@ function ViolationItem({ v }: { v: any }) {
             <div className="text-xs font-semibold text-white">Recommended Action:</div>
             <p className="text-slate-400 text-xs mb-3">{insight.action}</p>
 
-            <Button size="sm" className="w-full bg-indigo-500 hover:bg-blue-700 text-white h-7 text-xs gap-2" onClick={(e) => { e.stopPropagation(); alert(`Connecting you with ${insight.pro}... (Feature coming soon)`) }}>
-              Connect with {insight.pro} <ArrowRight className="w-3 h-3" />
-            </Button>
+            <div className="flex gap-2">
+              <Button size="sm" className="flex-1 bg-indigo-500 hover:bg-blue-700 text-white h-7 text-xs gap-2" onClick={(e) => { e.stopPropagation(); alert(`Connecting you with ${insight.pro}... (Feature coming soon)`) }}>
+                Connect {insight.pro} <ArrowRight className="w-3 h-3" />
+              </Button>
+              {onGenerateAffidavit && (
+                <Button size="sm" disabled={isGenerating} variant="outline" className="flex-1 border-emerald-500/50 text-emerald-400 hover:bg-emerald-500/10 h-7 text-xs gap-2" onClick={(e) => { e.stopPropagation(); onGenerateAffidavit(v); }}>
+                  {isGenerating ? "Drafting..." : "Auto-Doc Affidavit"} <FileText className="w-3 h-3" />
+                </Button>
+              )}
+            </div>
           </div>
         </motion.div>
       )}
@@ -816,6 +824,39 @@ function ViolationItem({ v }: { v: any }) {
 
 // --- PROPERTY DETAILS MODAL (Public/Private) ---
 function PropertyDetailsModal({ property, cityData, onClose }: { property: Property, cityData: any, onClose: () => void }) {
+  const { generatePDF } = useGeneratePDF();
+  const [affidavitHtml, setAffidavitHtml] = useState<string | null>(null);
+  const [isGeneratingId, setIsGeneratingId] = useState<number | string | null>(null);
+  const [activeViolationForPdf, setActiveViolationForPdf] = useState<any>(null);
+
+  const handleGenerateAffidavit = async (violation: any) => {
+    setIsGeneratingId(violation.id || violation.violationid);
+    setActiveViolationForPdf(violation);
+    try {
+      const res = await fetch('/api/generate_affidavit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ property, violation })
+      });
+      const data = await res.json();
+      if (data.affidavitHtml) {
+        setAffidavitHtml(data.affidavitHtml);
+        // Wait a tick for the React DOM to render the hidden template
+        setTimeout(() => {
+          generatePDF({ elementId: 'affidavit-report-container', filename: `Affidavit_${property.bin || 'Prop'}_${violation.id || 'Violation'}.pdf` });
+          setIsGeneratingId(null);
+        }, 500);
+      } else {
+        alert("Failed to generate affidavit.");
+        setIsGeneratingId(null);
+      }
+    } catch (e) {
+      console.error(e);
+      alert("Error generating affidavit.");
+      setIsGeneratingId(null);
+    }
+  };
+
   if (!property) return null
   return (
     <AnimatePresence>
@@ -881,7 +922,7 @@ function PropertyDetailsModal({ property, cityData, onClose }: { property: Prope
                 {cityData?.violations?.length > 0 ? (
                   <div className="space-y-3">
                     {cityData.violations.slice(0, 5).map((v: any, i: number) => (
-                      <ViolationItem key={i} v={v} />
+                      <ViolationItem key={i} v={v} onGenerateAffidavit={handleGenerateAffidavit} isGenerating={isGeneratingId === (v.id || v.violationid)} />
                     ))}
                   </div>
                 ) : <div className="text-zinc-600 text-sm italic">No open violations found.</div>}
@@ -912,6 +953,14 @@ function PropertyDetailsModal({ property, cityData, onClose }: { property: Prope
             </div>
           </div>
         </motion.div>
+
+        {/* Hidden PDF Template Container */}
+        {affidavitHtml && activeViolationForPdf && (
+          <div style={{ position: 'absolute', top: '-9999px', left: '-9999px' }}>
+            <AffidavitTemplate property={property} violation={activeViolationForPdf} htmlContent={affidavitHtml} />
+          </div>
+        )}
+
       </motion.div>
     </AnimatePresence>
   )
