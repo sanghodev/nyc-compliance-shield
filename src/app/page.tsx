@@ -9,9 +9,8 @@ import {
   Settings, Bell, Search, Plus,
   Wrench, CheckCircle, AlertTriangle, Filter, CreditCard,
   ArrowUpRight, Activity, X, MessageSquare, Send,
-  Shield, Zap, BarChart3, ChevronDown, ChevronUp,
-  Home, ClipboardList, PenTool, Phone, Clock, Smartphone, Lock, ShieldCheck, Trash2,
-  Sparkles, ArrowRight, Scale, Flame, HardHat, Calendar, ArrowUpCircle, Download
+  Shield, ShieldCheck, Zap, BarChart3, ChevronDown, ChevronUp,
+  Sparkles, ArrowRight, Scale, Flame, HardHat, Calendar, ArrowUpCircle, Download, Leaf, Clock, ClipboardList, PenTool, Smartphone, Phone, Lock, Trash2, Home
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -828,7 +827,40 @@ function PropertyDetailsModal({ property, cityData, onClose }: { property: Prope
   const [affidavitHtml, setAffidavitHtml] = useState<string | null>(null);
   const [isGeneratingId, setIsGeneratingId] = useState<number | string | null>(null);
   const [activeViolationForPdf, setActiveViolationForPdf] = useState<any>(null);
+  const [ll97Props, setLl97Props] = useState({
+    address: "",
+    squareFootage: "",
+    buildingType: "Multifamily Residential",
+    heatingFuel: "Natural Gas",
+    yearBuilt: ""
+  })
+  const [ll97Loading, setLl97Loading] = useState(false)
+  const [ll97Result, setLl97Result] = useState<any>(null)
 
+  const handleSimulateLL97 = async () => {
+    if (!ll97Props.address || !ll97Props.squareFootage) {
+      alert("Address and Square Footage are required.");
+      return;
+    }
+    setLl97Loading(true)
+    try {
+      const res = await fetch('/api/ll97_simulate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(ll97Props)
+      })
+      const data = await res.json()
+      if (data.data) {
+        setLl97Result(data.data)
+      } else {
+        alert("Failed to simulate. Please try again.")
+      }
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setLl97Loading(false)
+    }
+  }
   const handleGenerateAffidavit = async (violation: any) => {
     setIsGeneratingId(violation.id || violation.violationid);
     setActiveViolationForPdf(violation);
@@ -969,7 +1001,7 @@ function PropertyDetailsModal({ property, cityData, onClose }: { property: Prope
 // --- MAIN APP ---
 export default function APP_ROOT() {
   const [userRole, setUserRole] = useState<UserRole>(null)
-  const [activeTab, setActiveTab] = useState("dashboard")
+  const [activeTab, setActiveTab] = useState('portfolio') // 'portfolio', 'map', 'reports', 'settings', 'll97', 'contractors'
   const [isLoaded, setIsLoaded] = useState(false)
   const [userProfile, setUserProfile] = useState<any>(null)
   const [editProfile, setEditProfile] = useState<any>({}) // Local buffer for edits
@@ -986,7 +1018,7 @@ export default function APP_ROOT() {
   const [users, setUsers] = useState<UserProfile[]>([])
 
   // LL97 Simulator State
-  const [ll97Input, setLl97Input] = useState({ squareFootage: '', heatingFuel: 'Natural Gas', buildingType: 'Multifamily Residential', yearBuilt: '' })
+  const [ll97Props, setLl97Props] = useState({ address: '', squareFootage: '', heatingFuel: 'Natural Gas', buildingType: 'Multifamily Residential', yearBuilt: '' })
   const [ll97Result, setLl97Result] = useState<any>(null)
   const [ll97Loading, setLl97Loading] = useState(false)
   const runLL97Simulation = async (property?: any) => {
@@ -997,10 +1029,10 @@ export default function APP_ROOT() {
         address: property?.address || 'Selected Property',
         units: property?.units || 0,
         borough: property?.borough || 'Manhattan',
-        buildingType: ll97Input.buildingType,
-        squareFootage: ll97Input.squareFootage || undefined,
-        heatingFuel: ll97Input.heatingFuel,
-        yearBuilt: ll97Input.yearBuilt || undefined,
+        buildingType: ll97Props.buildingType,
+        squareFootage: ll97Props.squareFootage || undefined,
+        heatingFuel: ll97Props.heatingFuel,
+        yearBuilt: ll97Props.yearBuilt || undefined,
       }
       const res = await fetch('/api/ll97_simulate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
       const json = await res.json()
@@ -1366,7 +1398,7 @@ export default function APP_ROOT() {
 
       // Generate a secure random password
       const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$%'
-      const randomValues = crypto.getRandomValues(new Uint8Array(12))
+      const randomValues = crypto.getRandomValues(new Uint16Array(12))
       const tempPassword = Array.from(randomValues, v => chars[v % chars.length]).join('')
 
       const { data, error } = await tempSupabase.auth.signUp({
@@ -1750,13 +1782,16 @@ export default function APP_ROOT() {
                   </div>
                   <div className="divide-y divide-slate-800/50">
                     {properties.slice(0, 5).map(p => (
-                      <div key={p.id} className="p-4 flex items-center justify-between hover:bg-slate-800/40/50 transition-colors">
+                      <div key={p.id} className="p-4 flex items-center justify-between hover:bg-slate-800/40/50 transition-colors cursor-pointer" onClick={() => setManageProp(p)}>
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 bg-slate-800/40 rounded-lg flex items-center justify-center text-slate-500"><Building2 className="w-5 h-5" /></div>
                           <div><div className="font-bold text-white">{p.address}</div><div className="text-xs text-slate-500">{p.borough} • {p.units} Units</div></div>
                         </div>
                         <div className="flex items-center gap-6">
-                          <div className="text-right"><div className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Access Code</div><div className="font-mono text-lg text-purple-400 font-bold tracking-widest">{p.access_code || 'N/A'}</div></div>
+                          <div className="text-right">
+                            <div className="text-sm font-bold text-white">{p.violations}</div>
+                            <div className="text-[10px] text-slate-500 uppercase">Violations</div>
+                          </div>
                           <Badge className={p.status === 'Good' ? 'bg-emerald-500/10 text-emerald-500 border-0' : 'bg-red-500/10 text-red-500 border-0'}>{p.status}</Badge>
                         </div>
                       </div>
@@ -1766,266 +1801,275 @@ export default function APP_ROOT() {
               </div>
             ) : null}
 
+
             {/* ADMIN USERS TAB */}
             {/* ADMIN USER MANAGEMENT TABS */}
-            {['admin_managers', 'admin_tenants', 'admin_subadmins'].includes(activeTab) && (
-              <div className="space-y-6">
-                <div className="flex justify-between items-center">
-                  <div>
-                    <h2 className="text-2xl font-bold text-white">
-                      {activeTab === 'admin_managers' ? 'Management Companies' : activeTab === 'admin_tenants' ? 'Tenants' : 'System Administrators'}
-                    </h2>
-                    <p className="text-slate-400">
-                      {activeTab === 'admin_managers' ? 'Oversee property management firms.' : activeTab === 'admin_tenants' ? 'Manage resident access.' : 'Manage super-admin access permissions.'}
-                    </p>
+            {
+              ['admin_managers', 'admin_tenants', 'admin_subadmins'].includes(activeTab) && (
+                <div className="space-y-6">
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <h2 className="text-2xl font-bold text-white">
+                        {activeTab === 'admin_managers' ? 'Management Companies' : activeTab === 'admin_tenants' ? 'Tenants' : 'System Administrators'}
+                      </h2>
+                      <p className="text-slate-400">
+                        {activeTab === 'admin_managers' ? 'Oversee property management firms.' : activeTab === 'admin_tenants' ? 'Manage resident access.' : 'Manage super-admin access permissions.'}
+                      </p>
+                    </div>
+                    {activeTab === 'admin_subadmins' && (
+                      <Button className="bg-indigo-400 hover:bg-purple-700" onClick={() => alert("To add a new admin, they must sign up using the 'Super Admin Access' link on the login page.")}>
+                        <Plus className="w-4 h-4 mr-2" /> Add Admin
+                      </Button>
+                    )}
+                    {activeTab === 'admin_managers' && (
+                      <Button className="bg-indigo-500 hover:bg-blue-700" onClick={() => setShowForceAddManager(true)}>
+                        <Plus className="w-4 h-4 mr-2" /> Add Company
+                      </Button>
+                    )}
                   </div>
-                  {activeTab === 'admin_subadmins' && (
-                    <Button className="bg-indigo-400 hover:bg-purple-700" onClick={() => alert("To add a new admin, they must sign up using the 'Super Admin Access' link on the login page.")}>
-                      <Plus className="w-4 h-4 mr-2" /> Add Admin
-                    </Button>
-                  )}
-                  {activeTab === 'admin_managers' && (
-                    <Button className="bg-indigo-500 hover:bg-blue-700" onClick={() => setShowForceAddManager(true)}>
-                      <Plus className="w-4 h-4 mr-2" /> Add Company
-                    </Button>
-                  )}
-                </div>
 
-                <div className="border border-slate-700/50 rounded-lg overflow-hidden">
-                  <table className="w-full text-left text-sm text-slate-400">
-                    <thead className="bg-slate-900/40 backdrop-blur-md border-b border-slate-700/50 text-white uppercase text-xs font-bold">
-                      <tr>
-                        <th className="p-4">Name / ID</th>
-                        <th className="p-4">Email</th>
-                        <th className="p-4">Role</th>
-                        <th className="p-4">Joined</th>
-                        <th className="p-4">Status</th>
-                        <th className="p-4 text-right">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-800/50 bg-slate-900/40 backdrop-blur-md/50">
-                      {users.filter(u => {
-                        if (activeTab === 'admin_managers') return u.role === 'manager';
-                        if (activeTab === 'admin_tenants') return u.role === 'tenant';
-                        if (activeTab === 'admin_subadmins') return u.role === 'admin';
-                        return false;
-                      }).length === 0 ? (
-                        <tr><td colSpan={6} className="p-8 text-center">No users found in this category.</td></tr>
-                      ) : (
-                        users.filter(u => {
+                  <div className="border border-slate-700/50 rounded-lg overflow-hidden">
+                    <table className="w-full text-left text-sm text-slate-400">
+                      <thead className="bg-slate-900/40 backdrop-blur-md border-b border-slate-700/50 text-white uppercase text-xs font-bold">
+                        <tr>
+                          <th className="p-4">Name / ID</th>
+                          <th className="p-4">Email</th>
+                          <th className="p-4">Role</th>
+                          <th className="p-4">Joined</th>
+                          <th className="p-4">Status</th>
+                          <th className="p-4 text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-800/50 bg-slate-900/40 backdrop-blur-md/50">
+                        {users.filter(u => {
                           if (activeTab === 'admin_managers') return u.role === 'manager';
                           if (activeTab === 'admin_tenants') return u.role === 'tenant';
                           if (activeTab === 'admin_subadmins') return u.role === 'admin';
                           return false;
-                        }).map(u => (
-                          <tr key={u.id} className="hover:bg-slate-800/40/50 transition-colors">
-                            <td className="p-4 font-medium text-white">{u.full_name || u.id.slice(0, 8)}</td>
-                            <td className="p-4">{u.email}</td>
-                            <td className="p-4"><Badge variant="secondary" className="bg-slate-800/40 text-zinc-300">{u.role}</Badge></td>
-                            <td className="p-4">{new Date(u.created_at).toLocaleDateString()}</td>
-                            <td className="p-4">
-                              <Badge className={u.status === 'Active' ? 'bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20' : u.status === 'Suspended' ? 'bg-red-500/10 text-red-500' : 'bg-amber-400/10 text-amber-400'}>
-                                {u.status}
-                              </Badge>
-                            </td>
-                            <td className="p-4 text-right">
-                              {(u.status === 'Pending' || u.status === 'Suspended') && (
-                                <Button size="sm" className="bg-emerald-600 hover:bg-green-700 text-white" onClick={async () => {
-                                  const { error } = await supabase.rpc('approve_user', { target_id: u.id });
-                                  if (!error) {
-                                    setUsers(users.map(user => user.id === u.id ? { ...user, status: 'Active' } : user));
-                                  } else {
-                                    console.error("Failed to approve user:", error);
+                        }).length === 0 ? (
+                          <tr><td colSpan={6} className="p-8 text-center">No users found in this category.</td></tr>
+                        ) : (
+                          users.filter(u => {
+                            if (activeTab === 'admin_managers') return u.role === 'manager';
+                            if (activeTab === 'admin_tenants') return u.role === 'tenant';
+                            if (activeTab === 'admin_subadmins') return u.role === 'admin';
+                            return false;
+                          }).map(u => (
+                            <tr key={u.id} className="hover:bg-slate-800/40/50 transition-colors">
+                              <td className="p-4 font-medium text-white">{u.full_name || u.id.slice(0, 8)}</td>
+                              <td className="p-4">{u.email}</td>
+                              <td className="p-4"><Badge variant="secondary" className="bg-slate-800/40 text-zinc-300">{u.role}</Badge></td>
+                              <td className="p-4">{new Date(u.created_at).toLocaleDateString()}</td>
+                              <td className="p-4">
+                                <Badge className={u.status === 'Active' ? 'bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20' : u.status === 'Suspended' ? 'bg-red-500/10 text-red-500' : 'bg-amber-400/10 text-amber-400'}>
+                                  {u.status}
+                                </Badge>
+                              </td>
+                              <td className="p-4 text-right">
+                                {(u.status === 'Pending' || u.status === 'Suspended') && (
+                                  <Button size="sm" className="bg-emerald-600 hover:bg-green-700 text-white" onClick={async () => {
+                                    const { error } = await supabase.rpc('approve_user', { target_id: u.id });
+                                    if (!error) {
+                                      setUsers(users.map(user => user.id === u.id ? { ...user, status: 'Active' } : user));
+                                    } else {
+                                      console.error("Failed to approve user:", error);
+                                    }
+                                  }}>{u.status === 'Suspended' ? 'Reactivate' : 'Approve'}</Button>
+                                )}
+                                {u.status === 'Active' && (
+                                  <Button size="sm" variant="outline" className="border-red-900 text-red-500 hover:bg-red-900/20" onClick={async () => {
+                                    await supabase.from('profiles').update({ status: 'Suspended' }).eq('id', u.id);
+                                    setUsers(users.map(user => user.id === u.id ? { ...user, status: 'Suspended' } : user));
+                                  }}>Suspend</Button>
+                                )}
+                                <Button size="icon" variant="ghost" className="text-slate-500 hover:text-red-500 hover:bg-red-500/10 ml-2" onClick={async () => {
+                                  if (confirm("Are you sure you want to PERMANENTLY delete this user?")) {
+                                    const { error } = await supabase.rpc('delete_user', { target_id: u.id });
+                                    if (error) console.error(error);
+                                    else setUsers(users.filter(user => user.id !== u.id));
                                   }
-                                }}>{u.status === 'Suspended' ? 'Reactivate' : 'Approve'}</Button>
-                              )}
-                              {u.status === 'Active' && (
-                                <Button size="sm" variant="outline" className="border-red-900 text-red-500 hover:bg-red-900/20" onClick={async () => {
-                                  await supabase.from('profiles').update({ status: 'Suspended' }).eq('id', u.id);
-                                  setUsers(users.map(user => user.id === u.id ? { ...user, status: 'Suspended' } : user));
-                                }}>Suspend</Button>
-                              )}
-                              <Button size="icon" variant="ghost" className="text-slate-500 hover:text-red-500 hover:bg-red-500/10 ml-2" onClick={async () => {
-                                if (confirm("Are you sure you want to PERMANENTLY delete this user?")) {
-                                  const { error } = await supabase.rpc('delete_user', { target_id: u.id });
-                                  if (error) console.error(error);
-                                  else setUsers(users.filter(user => user.id !== u.id));
-                                }
-                              }}><Trash2 className="w-4 h-4" /></Button>
-                            </td>
-                          </tr>
-                        )))}
-                    </tbody>
-                  </table>
-                </div>
+                                }}><Trash2 className="w-4 h-4" /></Button>
+                              </td>
+                            </tr>
+                          )))}
+                      </tbody>
+                    </table>
+                  </div>
 
-                {/* FORCE ADD MANAGER MODAL */}
-                <AnimatePresence>
-                  {showForceAddManager && (
-                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[9999] bg-black/80 flex items-center justify-center p-4">
-                      <div className="bg-slate-900/40 backdrop-blur-md border border-slate-700/50 p-6 rounded-xl w-full max-w-sm space-y-4 relative">
-                        <h3 className="text-xl font-bold text-white mb-4">Add Management Company</h3>
-                        <div className="space-y-3">
-                          <Input placeholder="Manager Name" value={forceManagerData.name} onChange={e => setForceManagerData({ ...forceManagerData, name: e.target.value })} className="bg-slate-800/40 border-slate-700/50 text-white" />
-                          <Input placeholder="Email Address" type="email" value={forceManagerData.email} onChange={e => setForceManagerData({ ...forceManagerData, email: e.target.value.trim() })} className="bg-slate-800/40 border-slate-700/50 text-white" />
-                          <Input placeholder="Company Name" value={forceManagerData.company} onChange={e => setForceManagerData({ ...forceManagerData, company: e.target.value })} className="bg-slate-800/40 border-slate-700/50 text-white" />
-                          <div className="text-xs text-amber-400">Note: Default password will be <b>ChangeMe123!</b></div>
+                  {/* FORCE ADD MANAGER MODAL */}
+                  <AnimatePresence>
+                    {showForceAddManager && (
+                      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[9999] bg-black/80 flex items-center justify-center p-4">
+                        <div className="bg-slate-900/40 backdrop-blur-md border border-slate-700/50 p-6 rounded-xl w-full max-w-sm space-y-4 relative">
+                          <h3 className="text-xl font-bold text-white mb-4">Add Management Company</h3>
+                          <div className="space-y-3">
+                            <Input placeholder="Manager Name" value={forceManagerData.name} onChange={e => setForceManagerData({ ...forceManagerData, name: e.target.value })} className="bg-slate-800/40 border-slate-700/50 text-white" />
+                            <Input placeholder="Email Address" type="email" value={forceManagerData.email} onChange={e => setForceManagerData({ ...forceManagerData, email: e.target.value.trim() })} className="bg-slate-800/40 border-slate-700/50 text-white" />
+                            <Input placeholder="Company Name" value={forceManagerData.company} onChange={e => setForceManagerData({ ...forceManagerData, company: e.target.value })} className="bg-slate-800/40 border-slate-700/50 text-white" />
+                            <div className="text-xs text-amber-400">Note: Default password will be <b>ChangeMe123!</b></div>
+                          </div>
+                          <div className="flex justify-end gap-2 mt-4">
+                            <Button variant="ghost" onClick={() => setShowForceAddManager(false)}>Cancel</Button>
+                            <Button className="bg-indigo-500 hover:bg-blue-700" onClick={handleForceAddManager} disabled={!forceManagerData.email || forceManagerLoading}>
+                              {forceManagerLoading ? 'Creating...' : 'Create Account'}
+                            </Button>
+                          </div>
                         </div>
-                        <div className="flex justify-end gap-2 mt-4">
-                          <Button variant="ghost" onClick={() => setShowForceAddManager(false)}>Cancel</Button>
-                          <Button className="bg-indigo-500 hover:bg-blue-700" onClick={handleForceAddManager} disabled={!forceManagerData.email || forceManagerLoading}>
-                            {forceManagerLoading ? 'Creating...' : 'Create Account'}
-                          </Button>
-                        </div>
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
-            )}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              )
+            }
 
 
 
             {/* ADMIN REQUESTS TAB */}
-            {activeTab === 'admin_requests' && (
-              <div className="space-y-6">
-                <div className="flex justify-between items-center">
-                  <div><h2 className="text-2xl font-bold text-white">Request Management</h2><p className="text-slate-400">Track and resolve tenant issues.</p></div>
-                  <div className="flex gap-2">
-                    <Button variant="outline" className="border-slate-700/50 text-gray-300">Export CSV</Button>
+            {
+              activeTab === 'admin_requests' && (
+                <div className="space-y-6">
+                  <div className="flex justify-between items-center">
+                    <div><h2 className="text-2xl font-bold text-white">Request Management</h2><p className="text-slate-400">Track and resolve tenant issues.</p></div>
+                    <div className="flex gap-2">
+                      <Button variant="outline" className="border-slate-700/50 text-gray-300">Export CSV</Button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    {requests.map(req => (
+                      <div key={req.id} className="bg-slate-900/40 backdrop-blur-md border border-slate-700/50 p-4 rounded-lg flex items-center justify-between hover:bg-slate-800/40/50 transition-colors">
+                        <div className="flex items-center gap-4">
+                          <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${req.priority === 'Urgent' ? 'bg-red-500/20 text-red-500' : 'bg-sky-400/20 text-sky-400'}`}>
+                            {req.type === 'Repair' ? <Wrench className="w-6 h-6" /> : req.type === 'Billing' ? <CreditCard className="w-6 h-6" /> : <MessageSquare className="w-6 h-6" />}
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-white text-lg">{req.issue}</span>
+                              {req.priority === 'Urgent' && <Badge className="bg-red-500 text-white border-0">Urgent</Badge>}
+                              <Badge variant="outline" className="border-slate-700/50 text-slate-400">{req.type}</Badge>
+                            </div>
+                            <div className="text-sm text-slate-400">{req.unit} • {req.tenantName} • {req.date}</div>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-3">
+                          <select
+                            className="bg-slate-950 border border-slate-700/50 text-gray-300 text-sm rounded-md px-3 py-2 outline-none focus:border-purple-500"
+                            value={req.status}
+                            onChange={async (e) => {
+                              const newStatus = e.target.value;
+                              // Optimistic UI update
+                              const updated = requests.map(r => r.id === req.id ? { ...r, status: newStatus } : r);
+                              setRequests(updated as any);
+                              // Persist to Supabase
+                              const { error } = await supabase.from('requests').update({ status: newStatus }).eq('id', req.id);
+                              if (error) console.error('Failed to persist status:', error);
+                            }}
+                          >
+                            <option value="Pending">Pending</option>
+                            <option value="In Progress">In Progress</option>
+                            <option value="Resolved">Resolved</option>
+                            <option value="On Hold">On Hold</option>
+                          </select>
+                          <Button size="sm" className="bg-slate-800/40 hover:bg-zinc-700 text-white">Details</Button>
+                        </div>
+                      </div>
+                    ))}
+                    {requests.length === 0 && <div className="text-center text-slate-500 py-12">No active requests found.</div>}
                   </div>
                 </div>
-
-                <div className="space-y-4">
-                  {requests.map(req => (
-                    <div key={req.id} className="bg-slate-900/40 backdrop-blur-md border border-slate-700/50 p-4 rounded-lg flex items-center justify-between hover:bg-slate-800/40/50 transition-colors">
-                      <div className="flex items-center gap-4">
-                        <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${req.priority === 'Urgent' ? 'bg-red-500/20 text-red-500' : 'bg-sky-400/20 text-sky-400'}`}>
-                          {req.type === 'Repair' ? <Wrench className="w-6 h-6" /> : req.type === 'Billing' ? <CreditCard className="w-6 h-6" /> : <MessageSquare className="w-6 h-6" />}
-                        </div>
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="font-bold text-white text-lg">{req.issue}</span>
-                            {req.priority === 'Urgent' && <Badge className="bg-red-500 text-white border-0">Urgent</Badge>}
-                            <Badge variant="outline" className="border-slate-700/50 text-slate-400">{req.type}</Badge>
-                          </div>
-                          <div className="text-sm text-slate-400">{req.unit} • {req.tenantName} • {req.date}</div>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-3">
-                        <select
-                          className="bg-slate-950 border border-slate-700/50 text-gray-300 text-sm rounded-md px-3 py-2 outline-none focus:border-purple-500"
-                          value={req.status}
-                          onChange={async (e) => {
-                            const newStatus = e.target.value;
-                            // Optimistic UI update
-                            const updated = requests.map(r => r.id === req.id ? { ...r, status: newStatus } : r);
-                            setRequests(updated as any);
-                            // Persist to Supabase
-                            const { error } = await supabase.from('requests').update({ status: newStatus }).eq('id', req.id);
-                            if (error) console.error('Failed to persist status:', error);
-                          }}
-                        >
-                          <option value="Pending">Pending</option>
-                          <option value="In Progress">In Progress</option>
-                          <option value="Resolved">Resolved</option>
-                          <option value="On Hold">On Hold</option>
-                        </select>
-                        <Button size="sm" className="bg-slate-800/40 hover:bg-zinc-700 text-white">Details</Button>
-                      </div>
-                    </div>
-                  ))}
-                  {requests.length === 0 && <div className="text-center text-slate-500 py-12">No active requests found.</div>}
-                </div>
-              </div>
-            )}
+              )
+            }
             {/* PRO NETWORK TAB */}
-            {activeTab === 'admin_pro' && (
-              <div className="space-y-6">
-                <div className="flex justify-between items-center mb-6">
-                  <div><h2 className="text-2xl font-bold text-white">Pro Network Management</h2><p className="text-slate-400">Manage contractors, categories, and verification status.</p></div>
-                  <Button className="bg-indigo-400 hover:bg-purple-700 text-white" onClick={() => setShowAddContractor(true)}><Plus className="w-4 h-4 mr-2" /> Add New Contractor</Button>
-                </div>
-
-                {/* FILTERS */}
-                <div className="flex gap-4 bg-slate-900/40 backdrop-blur-md/50 p-3 rounded-lg border border-slate-700/50">
-                  <div className="flex items-center gap-2">
-                    <Filter className="w-4 h-4 text-slate-400" />
-                    <span className="text-sm font-medium text-gray-300">Filters:</span>
+            {
+              activeTab === 'admin_pro' && (
+                <div className="space-y-6">
+                  <div className="flex justify-between items-center mb-6">
+                    <div><h2 className="text-2xl font-bold text-white">Pro Network Management</h2><p className="text-slate-400">Manage contractors, categories, and verification status.</p></div>
+                    <Button className="bg-indigo-400 hover:bg-purple-700 text-white" onClick={() => setShowAddContractor(true)}><Plus className="w-4 h-4 mr-2" /> Add New Contractor</Button>
                   </div>
-                  <select className="bg-slate-800/40 border-slate-700/50 text-white text-sm rounded-md px-3 py-1" value={filterCategory} onChange={e => setFilterCategory(e.target.value)}>
-                    <option value="All">All Categories</option>
-                    <option value="Cleaning">Cleaning</option>
-                    <option value="Construction">Construction</option>
-                    <option value="Plumbing">Plumbing</option>
-                    <option value="Exterminator">Exterminator</option>
-                    <option value="Handyman">Handyman</option>
-                    <option value="Electrical">Electrical</option>
-                    <option value="HVAC">HVAC</option>
-                    <option value="Security">Security</option>
-                    <option value="General">General</option>
-                  </select>
-                  <select className="bg-slate-800/40 border-slate-700/50 text-white text-sm rounded-md px-3 py-1" value={filterLocation} onChange={e => setFilterLocation(e.target.value)}>
-                    <option value="All">All Locations</option>
-                    <option value="Manhattan">Manhattan</option>
-                    <option value="Brooklyn">Brooklyn</option>
-                    <option value="Queens">Queens</option>
-                    <option value="Bronx">Bronx</option>
-                    <option value="Staten Island">Staten Island</option>
-                    <option value="NJ">New Jersey</option>
-                  </select>
-                  <Button variant="ghost" size="sm" className="text-xs text-slate-500 ml-auto" onClick={() => { setFilterCategory("All"); setFilterLocation("All"); }}>Reset</Button>
-                </div>
 
-                <div className="grid grid-cols-1 gap-4">
-                  {filteredContractors.length === 0 ? <div className="text-center text-slate-500 py-8">No contractors found matching filters.</div> : filteredContractors.map(c => (
-                    <div key={c.id} className="bg-slate-900/40 backdrop-blur-md border border-slate-700/50 p-4 rounded-lg flex items-center justify-between">
-                      <div className="flex items-center gap-4">
-                        {c.image ? (
-                          <img src={c.image} alt={c.name} className="w-12 h-12 rounded-lg object-cover bg-slate-800/40" />
-                        ) : (
-                          <div className="w-12 h-12 bg-slate-800/40 rounded-lg flex items-center justify-center text-xl font-bold text-slate-500">{c.name[0]}</div>
-                        )}
-                        <div>
-                          <div className="font-bold text-white text-lg">{c.name}</div>
-                          {c.company && <div className="text-sm text-slate-400 font-medium">{c.company}</div>}
-                          <div className="text-purple-400 text-sm flex items-center gap-2">
-                            <span>{c.category || c.type}</span>
-                            {c.location && <span className="bg-slate-800/40 text-gray-300 px-1.5 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider">{c.location}</span>}
-                            <span className="text-emerald-500 flex items-center gap-1">• Verified <CheckCircle className="w-3 h-3" /></span>
+                  {/* FILTERS */}
+                  <div className="flex gap-4 bg-slate-900/40 backdrop-blur-md/50 p-3 rounded-lg border border-slate-700/50">
+                    <div className="flex items-center gap-2">
+                      <Filter className="w-4 h-4 text-slate-400" />
+                      <span className="text-sm font-medium text-gray-300">Filters:</span>
+                    </div>
+                    <select className="bg-slate-800/40 border-slate-700/50 text-white text-sm rounded-md px-3 py-1" value={filterCategory} onChange={e => setFilterCategory(e.target.value)}>
+                      <option value="All">All Categories</option>
+                      <option value="Cleaning">Cleaning</option>
+                      <option value="Construction">Construction</option>
+                      <option value="Plumbing">Plumbing</option>
+                      <option value="Exterminator">Exterminator</option>
+                      <option value="Handyman">Handyman</option>
+                      <option value="Electrical">Electrical</option>
+                      <option value="HVAC">HVAC</option>
+                      <option value="Security">Security</option>
+                      <option value="General">General</option>
+                    </select>
+                    <select className="bg-slate-800/40 border-slate-700/50 text-white text-sm rounded-md px-3 py-1" value={filterLocation} onChange={e => setFilterLocation(e.target.value)}>
+                      <option value="All">All Locations</option>
+                      <option value="Manhattan">Manhattan</option>
+                      <option value="Brooklyn">Brooklyn</option>
+                      <option value="Queens">Queens</option>
+                      <option value="Bronx">Bronx</option>
+                      <option value="Staten Island">Staten Island</option>
+                      <option value="NJ">New Jersey</option>
+                    </select>
+                    <Button variant="ghost" size="sm" className="text-xs text-slate-500 ml-auto" onClick={() => { setFilterCategory("All"); setFilterLocation("All"); }}>Reset</Button>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-4">
+                    {filteredContractors.length === 0 ? <div className="text-center text-slate-500 py-8">No contractors found matching filters.</div> : filteredContractors.map(c => (
+                      <div key={c.id} className="bg-slate-900/40 backdrop-blur-md border border-slate-700/50 p-4 rounded-lg flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                          {c.image ? (
+                            <img src={c.image} alt={c.name} className="w-12 h-12 rounded-lg object-cover bg-slate-800/40" />
+                          ) : (
+                            <div className="w-12 h-12 bg-slate-800/40 rounded-lg flex items-center justify-center text-xl font-bold text-slate-500">{c.name[0]}</div>
+                          )}
+                          <div>
+                            <div className="font-bold text-white text-lg">{c.name}</div>
+                            {c.company && <div className="text-sm text-slate-400 font-medium">{c.company}</div>}
+                            <div className="text-purple-400 text-sm flex items-center gap-2">
+                              <span>{c.category || c.type}</span>
+                              {c.location && <span className="bg-slate-800/40 text-gray-300 px-1.5 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider">{c.location}</span>}
+                              <span className="text-emerald-500 flex items-center gap-1">• Verified <CheckCircle className="w-3 h-3" /></span>
+                            </div>
                           </div>
                         </div>
+                        <div className="flex gap-2">
+                          <Button variant="outline" size="sm" className="border-slate-700/50 text-gray-300 hover:text-white" onClick={() => {
+                            setEditingContractor(c)
+                            setNewCon({ name: c.name, company: c.company || '', location: c.location || '', category: c.category || c.type, phone: c.phone || '', email: c.email || '', image: c.image || '' })
+                            setShowAddContractor(true)
+                          }}>Edit Profile</Button>
+                          <Button variant="outline" size="sm" className="border-slate-700/50 text-red-400 hover:text-red-300 hover:bg-red-900/20" onClick={() => handleDeleteContractor(c.id)}>Delete</Button>
+                        </div>
                       </div>
-                      <div className="flex gap-2">
-                        <Button variant="outline" size="sm" className="border-slate-700/50 text-gray-300 hover:text-white" onClick={() => {
-                          setEditingContractor(c)
-                          setNewCon({ name: c.name, company: c.company || '', location: c.location || '', category: c.category || c.type, phone: c.phone || '', email: c.email || '', image: c.image || '' })
-                          setShowAddContractor(true)
-                        }}>Edit Profile</Button>
-                        <Button variant="outline" size="sm" className="border-slate-700/50 text-red-400 hover:text-red-300 hover:bg-red-900/20" onClick={() => handleDeleteContractor(c.id)}>Delete</Button>
-                      </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
-              </div>
-            )}
+              )
+            }
 
-            {activeTab === 'admin_settings' && (
-              <div className="max-w-2xl space-y-6">
-                <h2 className="text-2xl font-bold text-white">Global System Settings</h2>
-                <Card className="bg-slate-900/40 backdrop-blur-md border-slate-700/50"><CardContent className="p-6 space-y-6">
-                  <div className="flex items-center justify-between"><div className="text-white font-medium">Maintenance Mode</div><div className="w-12 h-6 bg-zinc-700 rounded-full relative cursor-pointer"><div className="absolute left-1 top-1 w-4 h-4 bg-zinc-400 rounded-full"></div></div></div>
-                  <div className="flex items-center justify-between"><div className="text-white font-medium">Allow New User Signup</div><div className="w-12 h-6 bg-emerald-600 rounded-full relative cursor-pointer"><div className="absolute right-1 top-1 w-4 h-4 bg-white rounded-full"></div></div></div>
-                  <div className="flex items-center justify-between"><div className="text-white font-medium">Require Admin Approval for Tenants</div><div className="w-12 h-6 bg-emerald-600 rounded-full relative cursor-pointer"><div className="absolute right-1 top-1 w-4 h-4 bg-white rounded-full"></div></div></div>
-                </CardContent></Card>
-              </div>
-            )}
-          </div>
-        </main>
+            {
+              activeTab === 'admin_settings' && (
+                <div className="max-w-2xl space-y-6">
+                  <h2 className="text-2xl font-bold text-white">Global System Settings</h2>
+                  <Card className="bg-slate-900/40 backdrop-blur-md border-slate-700/50"><CardContent className="p-6 space-y-6">
+                    <div className="flex items-center justify-between"><div className="text-white font-medium">Maintenance Mode</div><div className="w-12 h-6 bg-zinc-700 rounded-full relative cursor-pointer"><div className="absolute left-1 top-1 w-4 h-4 bg-zinc-400 rounded-full"></div></div></div>
+                    <div className="flex items-center justify-between"><div className="text-white font-medium">Allow New User Signup</div><div className="w-12 h-6 bg-emerald-600 rounded-full relative cursor-pointer"><div className="absolute right-1 top-1 w-4 h-4 bg-white rounded-full"></div></div></div>
+                    <div className="flex items-center justify-between"><div className="text-white font-medium">Require Admin Approval for Tenants</div><div className="w-12 h-6 bg-emerald-600 rounded-full relative cursor-pointer"><div className="absolute right-1 top-1 w-4 h-4 bg-white rounded-full"></div></div></div>
+                  </CardContent></Card>
+                </div>
+              )
+            }
+          </div >
+        </main >
 
         {/* ADMIN MODALS */}
-        <AnimatePresence>{showAddContractor && (
+        < AnimatePresence > {showAddContractor && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[9999] bg-black/80 flex items-center justify-center p-4">
             <div className="bg-slate-900/40 backdrop-blur-md border border-slate-700/50 p-6 rounded-xl w-full max-w-md space-y-4">
               <h3 className="text-xl font-bold text-white">{editingContractor ? 'Edit Contractor' : 'Add New Contractor'}</h3>
@@ -2080,8 +2124,9 @@ export default function APP_ROOT() {
               </div>
             </div>
           </motion.div>
-        )}</AnimatePresence>
-      </div>
+        )
+        }</AnimatePresence >
+      </div >
     )
   }
 
@@ -2354,11 +2399,11 @@ export default function APP_ROOT() {
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     <div>
                       <label className="text-xs text-slate-400 mb-1 block">Approx. Square Footage</label>
-                      <Input placeholder="e.g. 50000" value={ll97Input.squareFootage} onChange={e => setLl97Input({ ...ll97Input, squareFootage: e.target.value })} className="bg-slate-800/40 border-slate-600/50" />
+                      <Input placeholder="e.g. 50000" value={ll97Props.squareFootage} onChange={e => setLl97Props({ ...ll97Props, squareFootage: e.target.value })} className="bg-slate-800/40 border-slate-600/50" />
                     </div>
                     <div>
                       <label className="text-xs text-slate-400 mb-1 block">Primary Heating Fuel</label>
-                      <select className="w-full bg-slate-800/40 border border-slate-600/50 text-white rounded-md p-2 text-sm" value={ll97Input.heatingFuel} onChange={e => setLl97Input({ ...ll97Input, heatingFuel: e.target.value })}>
+                      <select className="w-full bg-slate-800/40 border border-slate-600/50 text-white rounded-md p-2 text-sm" value={ll97Props.heatingFuel} onChange={e => setLl97Props({ ...ll97Props, heatingFuel: e.target.value })}>
                         <option value="Natural Gas">Natural Gas</option>
                         <option value="#2 Fuel Oil">#2 Fuel Oil</option>
                         <option value="#4 Fuel Oil">#4 Fuel Oil</option>
@@ -2368,7 +2413,7 @@ export default function APP_ROOT() {
                     </div>
                     <div>
                       <label className="text-xs text-slate-400 mb-1 block">Building Type</label>
-                      <select className="w-full bg-slate-800/40 border border-slate-600/50 text-white rounded-md p-2 text-sm" value={ll97Input.buildingType} onChange={e => setLl97Input({ ...ll97Input, buildingType: e.target.value })}>
+                      <select className="w-full bg-slate-800/40 border border-slate-600/50 text-white rounded-md p-2 text-sm" value={ll97Props.buildingType} onChange={e => setLl97Props({ ...ll97Props, buildingType: e.target.value })}>
                         <option value="Multifamily Residential">Multifamily Residential</option>
                         <option value="Office">Office</option>
                         <option value="Retail">Retail</option>
@@ -2378,7 +2423,7 @@ export default function APP_ROOT() {
                     </div>
                     <div>
                       <label className="text-xs text-slate-400 mb-1 block">Year Built</label>
-                      <Input placeholder="e.g. 1960" value={ll97Input.yearBuilt} onChange={e => setLl97Input({ ...ll97Input, yearBuilt: e.target.value })} className="bg-slate-800/40 border-slate-600/50" />
+                      <Input placeholder="e.g. 1960" value={ll97Props.yearBuilt} onChange={e => setLl97Props({ ...ll97Props, yearBuilt: e.target.value })} className="bg-slate-800/40 border-slate-600/50" />
                     </div>
                   </div>
 
@@ -2469,6 +2514,179 @@ export default function APP_ROOT() {
                   )}
                 </motion.div>
               )}
+            </div>
+          )}
+
+          {/* LL97 SIMULATOR TAB */}
+          {activeTab === 'll97' && (
+            <div className="space-y-6 max-w-5xl">
+              <div className="flex justify-between items-start">
+                <div>
+                  <h2 className="text-2xl font-bold flex items-center gap-2 text-emerald-400"><Leaf className="w-6 h-6" /> Local Law 97 Simulator</h2>
+                  <p className="text-muted-foreground mt-1">Estimate carbon emissions, visualize penalty timelines, and discover ROI for green retrofits.</p>
+                </div>
+              </div>
+
+              <div className="grid md:grid-cols-3 gap-6">
+                {/* Left Column: Input Form */}
+                <div className="md:col-span-1 space-y-4">
+                  <Card className="bg-slate-900/40 backdrop-blur-md border border-slate-700/50">
+                    <CardHeader className="pb-4">
+                      <CardTitle className="text-lg text-white">Building Profile</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold text-slate-400 uppercase">Property Address *</label>
+                        <Input placeholder="e.g. 123 Broadway, NY" className="bg-slate-950 border-slate-700/50 text-white" value={ll97Props.address} onChange={e => setLl97Props({ ...ll97Props, address: e.target.value })} />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold text-slate-400 uppercase">Square Footage *</label>
+                        <Input type="number" placeholder="e.g. 50000" className="bg-slate-950 border-slate-700/50 text-white" value={ll97Props.squareFootage} onChange={e => setLl97Props({ ...ll97Props, squareFootage: e.target.value })} />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold text-slate-400 uppercase">Year Built</label>
+                        <Input type="number" placeholder="e.g. 1960" className="bg-slate-950 border-slate-700/50 text-white" value={ll97Props.yearBuilt} onChange={e => setLl97Props({ ...ll97Props, yearBuilt: e.target.value })} />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold text-slate-400 uppercase">Primary Fuel</label>
+                        <select className="w-full bg-slate-950 border border-slate-700/50 text-white text-sm rounded-md p-2 outline-none focus:ring-1 focus:ring-emerald-500" value={ll97Props.heatingFuel} onChange={e => setLl97Props({ ...ll97Props, heatingFuel: e.target.value })}>
+                          <option>Natural Gas</option>
+                          <option>#2 Fuel Oil</option>
+                          <option>#4 Fuel Oil</option>
+                          <option>District Steam</option>
+                          <option>Electricity (Heat Pumps)</option>
+                        </select>
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold text-slate-400 uppercase">Building Type</label>
+                        <select className="w-full bg-slate-950 border border-slate-700/50 text-white text-sm rounded-md p-2 outline-none focus:ring-1 focus:ring-emerald-500" value={ll97Props.buildingType} onChange={e => setLl97Props({ ...ll97Props, buildingType: e.target.value })}>
+                          <option>Multifamily Residential</option>
+                          <option>Commercial Office</option>
+                          <option>Retail</option>
+                          <option>Industrial</option>
+                          <option>Mixed Use</option>
+                        </select>
+                      </div>
+                      <Button className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold h-10 mt-2" onClick={() => runLL97Simulation()} disabled={ll97Loading}>
+                        {ll97Loading ? <><Zap className="w-4 h-4 mr-2 animate-pulse" /> Analyzing Emissions Data...</> : <><Activity className="w-4 h-4 mr-2" /> Run AI Simulation</>}
+                      </Button>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* Right Column: Visualization Output */}
+                <div className="md:col-span-2 space-y-6">
+                  {!ll97Result && !ll97Loading ? (
+                    <div className="h-full min-h-[400px] border border-dashed border-slate-700/50 rounded-xl flex flex-col items-center justify-center p-8 text-center bg-slate-900/20">
+                      <Leaf className="w-16 h-16 text-slate-700 mb-4" />
+                      <h3 className="text-xl font-bold text-slate-500 mb-2">Ready to Simulate</h3>
+                      <p className="text-slate-600 max-w-sm">Enter the building parameters on the left to project carbon emissions and calculate 10-year penalty risks for Local Law 97.</p>
+                    </div>
+                  ) : ll97Loading ? (
+                    <div className="h-full min-h-[400px] border border-slate-700/50 rounded-xl flex flex-col items-center justify-center p-8 text-center bg-slate-900/40 backdrop-blur-md">
+                      <div className="w-16 h-16 border-4 border-emerald-500/30 border-t-emerald-500 rounded-full animate-spin mb-6"></div>
+                      <h3 className="text-lg font-bold text-emerald-400 mb-2 animate-pulse">Running Gemini AI Compliance Models...</h3>
+                      <p className="text-slate-500 text-sm">Calculating phase limits and extrapolating retrofit ROI.</p>
+                    </div>
+                  ) : (
+                    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+                      {/* Status Header */}
+                      <div className={`p-5 rounded-xl border flex items-center justify-between shadow-lg ${ll97Result.compliance_status === 'Compliant' ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-red-500/10 border-red-500/30'}`}>
+                        <div>
+                          <div className="flex items-center gap-2 mb-1">
+                            {ll97Result.compliance_status === 'Compliant' ? <ShieldCheck className="w-5 h-5 text-emerald-500" /> : <AlertTriangle className="w-5 h-5 text-red-500" />}
+                            <span className={`font-bold text-lg ${ll97Result.compliance_status === 'Compliant' ? 'text-emerald-400' : 'text-red-400'}`}>{ll97Result.compliance_status}</span>
+                          </div>
+                          <p className="text-slate-300 text-sm mt-1">{ll97Result.summary}</p>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-xs text-slate-500 uppercase font-bold tracking-wider mb-1">10-Year Fine Risk</div>
+                          <div className="text-3xl font-bold text-white">{ll97Result.total_10yr_penalty_risk}</div>
+                        </div>
+                      </div>
+
+                      <div className="grid md:grid-cols-2 gap-6">
+                        {/* Penalty Timeline Chart (Custom CSS Bars) */}
+                        <Card className="bg-slate-900/40 backdrop-blur-md border-slate-700/50">
+                          <CardHeader className="pb-2">
+                            <CardTitle className="text-sm text-slate-400 uppercase font-bold tracking-wider flex items-center gap-2"><BarChart3 className="w-4 h-4 text-sky-400" /> Annual Penality Projection</CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="flex items-end gap-6 h-48 mt-4 pt-4 border-b border-slate-700/50 pb-2 relative">
+                              {/* Dynamic Bars */}
+                              <div className="flex-1 flex flex-col justify-end items-center group relative cursor-pointer">
+                                <div className="text-xs text-white mb-2 font-mono font-bold">${ll97Result.phase1_penalty_annual?.toLocaleString() || 0}</div>
+                                <div className="w-16 bg-gradient-to-t from-sky-600 to-sky-400 rounded-t-md transition-all group-hover:opacity-80 shadow-[0_0_15px_rgba(56,189,248,0.2)]" style={{ height: ll97Result.phase1_penalty_annual > 0 ? '40%' : '10px' }}></div>
+                                <div className="absolute -bottom-6 text-xs text-slate-400 font-bold">2024 - 2029</div>
+                              </div>
+                              <div className="flex-1 flex flex-col justify-end items-center group relative cursor-pointer">
+                                <div className="text-xs text-red-400 mb-2 font-mono font-bold">${ll97Result.phase2_penalty_annual?.toLocaleString() || 0}</div>
+                                <div className="w-16 bg-gradient-to-t from-red-600 to-orange-400 rounded-t-md transition-all group-hover:opacity-80 shadow-[0_0_15px_rgba(239,68,68,0.3)] animate-pulse" style={{ height: ll97Result.phase2_penalty_annual > 0 ? '90%' : '10px' }}></div>
+                                <div className="absolute -bottom-6 text-xs text-slate-400 font-bold">2030 - 2034</div>
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+
+                        {/* Emissions Gap Data */}
+                        <div className="space-y-4">
+                          <Card className="bg-slate-900/40 backdrop-blur-md border-slate-700/50">
+                            <CardContent className="p-4 flex justify-between items-center">
+                              <div>
+                                <div className="text-xs text-slate-500 uppercase font-bold tracking-wider mb-1">Est. Emissions</div>
+                                <div className="text-xl font-bold text-white">{ll97Result.estimated_emissions_tco2e} <span className="text-sm font-normal text-slate-400">tCO2e</span></div>
+                              </div>
+                              <Flame className="w-8 h-8 text-orange-500 opacity-50" />
+                            </CardContent>
+                          </Card>
+                          <Card className="bg-slate-900/40 backdrop-blur-md border-slate-700/50">
+                            <CardContent className="p-4 flex justify-between items-center">
+                              <div>
+                                <div className="text-xs text-slate-500 uppercase font-bold tracking-wider mb-1">Phase 2 Limit</div>
+                                <div className="text-xl font-bold text-emerald-400">{ll97Result.phase2_limit_tco2e} <span className="text-sm font-normal text-emerald-700">tCO2e</span></div>
+                              </div>
+                              <Scale className="w-8 h-8 text-emerald-500 opacity-50" />
+                            </CardContent>
+                          </Card>
+                        </div>
+                      </div>
+
+                      {/* Retrofit Recommendations */}
+                      {ll97Result.retrofits?.length > 0 && (
+                        <div className="bg-blue-900/10 border border-sky-400/20 rounded-xl p-5 mt-6">
+                          <h3 className="font-bold text-white text-lg flex items-center gap-2 mb-4"><Wrench className="w-5 h-5 text-sky-400" /> AI Recommended Solutions</h3>
+                          <div className="space-y-3">
+                            {ll97Result.retrofits.map((r: any, i: number) => (
+                              <div key={i} className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 bg-slate-950/50 border border-slate-800 rounded-lg">
+                                <div className="flex items-start gap-3">
+                                  <div className={`w-2 h-2 rounded-full mt-2 shrink-0 ${r.priority === 'Critical' || r.priority === 'High' ? 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)]' : r.priority === 'Medium' ? 'bg-amber-400' : 'bg-emerald-500'}`} />
+                                  <div>
+                                    <div className="font-bold text-sky-100 text-sm">{r.action}</div>
+                                    <div className="text-xs text-slate-400 mt-1">Est. Cost: <span className="text-slate-300 font-mono">{r.estimated_cost}</span> &nbsp;|&nbsp; Payback: <span className="text-slate-300 font-mono">{r.payback_years} yrs</span></div>
+                                  </div>
+                                </div>
+                                <div className="flex flex-col items-end shrink-0 w-full sm:w-auto">
+                                  <div className="text-emerald-400 font-bold text-sm">-{r.emission_reduction_pct}% CO2</div>
+                                  <Badge variant="outline" className={`mt-1 text-[10px] ${r.priority === 'Critical' || r.priority === 'High' ? 'text-red-400 border-red-500/30' : 'text-emerald-400 border-emerald-500/30'}`}>{r.priority}</Badge>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                          <Button className="w-full mt-4 bg-indigo-500 hover:bg-sky-400 text-white font-bold transition-all"><ClipboardList className="w-4 h-4 mr-2" /> Match with Contractors On Pro Network</Button>
+                        </div>
+                      )}
+                      {/* Timeline */}
+                      {ll97Result.compliance_timeline && (
+                        <div className="p-4 bg-slate-950 border border-slate-700/50 rounded-xl flex items-center gap-3">
+                          <Clock className="w-5 h-5 text-amber-500 shrink-0" />
+                          <p className="text-slate-300 text-sm leading-relaxed">{ll97Result.compliance_timeline}</p>
+                        </div>
+                      )}
+
+                    </motion.div>
+                  )}
+                </div>
+              </div>
             </div>
           )}
 

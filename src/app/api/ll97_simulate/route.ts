@@ -92,6 +92,7 @@ Format your response strictly as valid JSON:
                 compliance_timeline: 'Unable to determine.'
             }
         }
+        return NextResponse.json({ data: result })
 
     } catch (e: any) {
         console.error("LL97 Simulation API Error (Rate Limit/Failure):", e.message);
