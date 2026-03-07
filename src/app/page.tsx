@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, Component, ReactNode } from "react"
 import { createClient } from "@supabase/supabase-js"
 import { motion, AnimatePresence, useScroll, useTransform } from "framer-motion"
 import Link from "next/link"
@@ -10,7 +10,7 @@ import {
   Wrench, CheckCircle, AlertTriangle, Filter, CreditCard,
   ArrowUpRight, Activity, X, MessageSquare, Send,
   Shield, ShieldCheck, Zap, BarChart3, ChevronDown, ChevronUp,
-  Sparkles, ArrowRight, Scale, Flame, HardHat, Calendar, ArrowUpCircle, Download, Leaf, Clock, ClipboardList, PenTool, Smartphone, Phone, Lock, Trash2, Home
+  Sparkles, ArrowRight, Scale, Flame, HardHat, Calendar, ArrowUpCircle, Download, Leaf, Clock, ClipboardList, PenTool, Smartphone, Phone, Lock, Trash2, Home, Copy, Check, ShieldAlert
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -26,8 +26,38 @@ import { AuthModal } from "@/components/AuthModal"
 import { useGeneratePDF } from "@/hooks/useGeneratePDF"
 import AffidavitTemplate from "@/components/AffidavitTemplate"
 
+// Error Boundary for debugging silent crashes
+class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean; error: Error | null }> {
+  constructor(props: { children: ReactNode }) {
+    super(props)
+    this.state = { hasError: false, error: null }
+  }
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error }
+  }
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error('React tree crash:', error, errorInfo)
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ padding: 32, color: 'red', background: '#1a1a1a', minHeight: '100vh' }}>
+          <h2>🔴 Dashboard Crash Detected</h2>
+          <pre style={{ whiteSpace: 'pre-wrap', fontSize: 12, marginTop: 16 }}>
+            {this.state.error?.message}
+            {'\n\n'}
+            {this.state.error?.stack}
+          </pre>
+        </div>
+      )
+    }
+    return this.props.children
+  }
+}
+
 // --- Types ---
 type UserRole = "manager" | "tenant" | "admin" | "contractor" | null
+
 
 interface Property {
   id: number
@@ -45,6 +75,8 @@ interface Property {
   access_code?: string
   bin?: string
   bbl?: string
+  manager_id?: string
+  verification_document_url?: string
 }
 
 interface SearchResult {
@@ -98,7 +130,18 @@ interface UserProfile {
   role: string
   status: "Pending" | "Active" | "Suspended"
   created_at: string
-  membership_tier?: "Free" | "Pro" | "Business"
+  company_code?: string
+  membership_tier?: string
+}
+
+// Helper: Get max properties based on membership tier
+const getMaxPropertiesByTier = (tier?: string) => {
+  switch (tier) {
+    case 'Starter': return 5;
+    case 'Growth': return Infinity;
+    case 'Free':
+    default: return 1;
+  }
 }
 
 // (Mock data removed — all data now loaded from Supabase)
@@ -558,25 +601,45 @@ function LandingPage({ onEnter, publicSearchQuery, handlePublicSearch, handleSea
 }
 
 // --- TENANT DASHBOARD ---
-function TenantDashboard({ onLogout, onRequestSubmit }: { onLogout: () => void, onRequestSubmit: (req: any) => void }) {
+function TenantDashboard({ onLogout, onRequestSubmit, userProfile }: { onLogout: () => void, onRequestSubmit: (req: any) => void, userProfile?: any }) {
   const [showNewRequest, setShowNewRequest] = useState(false)
   const [newReq, setNewReq] = useState({ issue: "", type: "Repair", desc: "", contact: "email" })
   const [myRequests, setMyRequests] = useState<any[]>([])
 
+  const [tenantProfile, setTenantProfile] = useState<any>(userProfile || null)
+  const [tenantProperty, setTenantProperty] = useState<any>(null)
+
   useEffect(() => {
-    const fetchMyRequests = async () => {
+    const fetchDashboardData = async () => {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
       const { data } = await supabase.from('requests').select('*').eq('tenant_id', user.id).order('created_at', { ascending: false })
       if (data) setMyRequests(data)
+
+      // Fetch Profile and Property
+      const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single()
+      if (profile) {
+        setTenantProfile(profile)
+        if (profile.property_id) {
+          const { data: property } = await supabase.from('properties').select('*').eq('id', profile.property_id).single()
+          if (property) setTenantProperty(property)
+        }
+      }
     }
-    fetchMyRequests()
+    fetchDashboardData()
 
     // Realtime subscription for updates
     const channel = supabase.channel('tenant_requests')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'requests' }, (payload) => {
-        fetchMyRequests() // Refresh on change
+        // Just refresh the requests manually
+        supabase.auth.getUser().then(({ data: { user } }) => {
+          if (user) {
+            supabase.from('requests').select('*').eq('tenant_id', user.id).order('created_at', { ascending: false }).then(({ data }) => {
+              if (data) setMyRequests(data);
+            })
+          }
+        })
       })
       .subscribe()
 
@@ -592,15 +655,16 @@ function TenantDashboard({ onLogout, onRequestSubmit }: { onLogout: () => void, 
     if (!newReq.issue) return
     const req = {
       id: Date.now(),
-      tenantName: "You",
-      unit: "4B (123 Broadway)",
+      tenantName: tenantProfile?.full_name || "You",
+      unit: tenantProfile?.unit || "Unknown Unit",
       issue: newReq.issue,
       type: newReq.type,
       desc: newReq.desc,
       status: "Pending",
       date: "Just now",
       priority: "Medium",
-      contact_preference: newReq.contact
+      contact_preference: newReq.contact,
+      property_id: tenantProfile?.property_id
     }
     onRequestSubmit(req)
     // Optimistic update
@@ -623,7 +687,9 @@ function TenantDashboard({ onLogout, onRequestSubmit }: { onLogout: () => void, 
         <Card className="bg-gradient-to-br from-slate-900 to-slate-800 text-white shadow-xl border-0">
           <CardContent className="p-6">
             <h2 className="text-2xl font-bold mb-1">Welcome Home</h2>
-            <p className="text-slate-400 text-sm">123 Broadway, Unit 4B</p>
+            <p className="text-slate-400 text-sm">
+              {tenantProperty ? `${tenantProperty.address || 'Unknown Address'}, Unit ${tenantProfile?.unit || ''}` : 'Loading property details...'}
+            </p>
           </CardContent>
         </Card>
 
@@ -913,76 +979,95 @@ function PropertyDetailsModal({ property, cityData, onClose }: { property: Prope
           </div>
 
           <div className="p-6 space-y-8">
-            {/* 1. Building Info Card */}
-            <div className="bg-slate-950/50 border border-slate-700/50 rounded-xl p-5">
-              <div className="flex items-center gap-2 mb-4 font-bold text-lg text-white border-b border-slate-700/50 pb-2">
-                <Building2 className="w-5 h-5 text-sky-400" /> Building Information
+            {property.status === 'Pending Verification' ? (
+              <div className="flex flex-col items-center justify-center py-12 text-center bg-slate-900/40 rounded-xl border border-slate-700/50">
+                <div className="w-16 h-16 rounded-full bg-amber-500/20 flex items-center justify-center mb-4">
+                  <ShieldAlert className="w-8 h-8 text-amber-500" />
+                </div>
+                <h3 className="text-2xl font-bold text-white mb-2">Verification Pending</h3>
+                <p className="text-slate-400 max-w-md mx-auto mb-6">
+                  This property is currently under review by an administrator. You will gain full access to compliance tracking, tenant management, and live data feeds once verified.
+                </p>
+                <Button variant="outline" onClick={onClose} className="border-slate-700/50 text-gray-300 hover:text-white">Close</Button>
               </div>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-6 text-sm">
-                <div><div className="text-slate-500 mb-1">Registration #</div><div className="text-zinc-200 font-mono font-bold">{cityData?.registrations?.[0]?.registrationid || "N/A"}</div></div>
-                <div><div className="text-slate-500 mb-1">BIN</div><div className="text-zinc-200 font-mono font-bold">{cityData?.bin || cityData?.violations?.[0]?.bin || "N/A"}</div></div>
-                <div><div className="text-slate-500 mb-1">Block / Lot</div><div className="text-zinc-200 font-mono font-bold">{cityData?.violations?.[0]?.block || "?"} / {cityData?.violations?.[0]?.lot || "?"}</div></div>
-                <div><div className="text-slate-500 mb-1">Class</div><div className="text-zinc-200 font-mono font-bold">{cityData?.registrations?.[0]?.class || "Class A"}</div></div>
-              </div>
-            </div>
-
-            {/* 2. Summary Stats Row */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <Card className="bg-slate-900/40 backdrop-blur-md border-slate-700/50 hover:border-slate-700/50 transition-colors"><CardContent className="p-4 flex flex-col items-center">
-                <div className="text-3xl font-bold text-red-500 mb-1">{cityData?.violations?.length || 0}</div>
-                <div className="text-xs text-slate-500 uppercase font-bold tracking-wider">Violations</div>
-              </CardContent></Card>
-              <Card className="bg-slate-900/40 backdrop-blur-md border-slate-700/50 hover:border-slate-700/50 transition-colors"><CardContent className="p-4 flex flex-col items-center">
-                <div className="text-3xl font-bold text-amber-500 mb-1">{cityData?.complaints?.length || 0}</div>
-                <div className="text-xs text-slate-500 uppercase font-bold tracking-wider">Complaints</div>
-              </CardContent></Card>
-              <Card className="bg-slate-900/40 backdrop-blur-md border-slate-700/50 hover:border-slate-700/50 transition-colors"><CardContent className="p-4 flex flex-col items-center">
-                <div className="text-3xl font-bold text-sky-400 mb-1">{cityData?.litigations?.length || 0}</div>
-                <div className="text-xs text-slate-500 uppercase font-bold tracking-wider">Litigation</div>
-              </CardContent></Card>
-              <Card className="bg-slate-900/40 backdrop-blur-md border-slate-700/50 hover:border-slate-700/50 transition-colors"><CardContent className="p-4 flex flex-col items-center">
-                <div className="text-3xl font-bold text-emerald-500 mb-1">{cityData?.charges?.length || 0}</div>
-                <div className="text-xs text-slate-500 uppercase font-bold tracking-wider">Charges</div>
-              </CardContent></Card>
-            </div>
-
-            {/* 3. Detailed Lists */}
-            <div className="grid md:grid-cols-2 gap-8">
-              {/* HPD Violations */}
-              <div className="space-y-4">
-                <h3 className="font-bold text-white text-lg flex items-center gap-2"><AlertTriangle className="w-5 h-5 text-red-500" /> Open Violations</h3>
-                {cityData?.violations?.length > 0 ? (
-                  <div className="space-y-3">
-                    {cityData.violations.slice(0, 5).map((v: any, i: number) => (
-                      <ViolationItem key={i} v={v} onGenerateAffidavit={handleGenerateAffidavit} isGenerating={isGeneratingId === (v.id || v.violationid)} />
-                    ))}
+            ) : (
+              <>
+                {/* 1. Building Info Card */}
+                <div className="bg-slate-950/50 border border-slate-700/50 rounded-xl p-5">
+                  <div className="flex items-center gap-2 mb-4 font-bold text-lg text-white border-b border-slate-700/50 pb-2">
+                    <Building2 className="w-5 h-5 text-sky-400" /> Building Information
                   </div>
-                ) : <div className="text-zinc-600 text-sm italic">No open violations found.</div>}
-              </div>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-6 text-sm">
+                    <div><div className="text-slate-500 mb-1">Registration #</div><div className="text-zinc-200 font-mono font-bold">{cityData?.registrations?.[0]?.registrationid || "N/A"}</div></div>
+                    <div><div className="text-slate-500 mb-1">BIN</div><div className="text-zinc-200 font-mono font-bold">{cityData?.bin || cityData?.violations?.[0]?.bin || "N/A"}</div></div>
+                    <div><div className="text-slate-500 mb-1">Block / Lot</div><div className="text-zinc-200 font-mono font-bold">{cityData?.violations?.[0]?.block || "?"} / {cityData?.violations?.[0]?.lot || "?"}</div></div>
+                    <div><div className="text-slate-500 mb-1">Class</div><div className="text-zinc-200 font-mono font-bold">{cityData?.registrations?.[0]?.class || "Class A"}</div></div>
+                  </div>
+                </div>
 
-              {/* 311 Complaints */}
-              <div className="space-y-4">
-                <h3 className="font-bold text-white text-lg flex items-center gap-2"><Phone className="w-5 h-5 text-amber-500" /> Recent 311 Complaints</h3>
-                {cityData?.complaints?.length > 0 ? (
-                  <div className="space-y-3">
-                    {cityData.complaints.slice(0, 5).map((c: any, i: number) => (
-                      <div key={i} className="bg-slate-950 border border-slate-700/50 p-3 rounded-lg flex justify-between items-start hover:bg-slate-900/40 backdrop-blur-md transition-colors">
-                        <div>
-                          <div className="font-medium text-orange-400 text-sm mb-1">{c.complaint_type}: {c.descriptor}</div>
-                          <div className="text-xs text-slate-500">Created: {c.created_date && new Date(c.created_date).toLocaleDateString()}</div>
-                        </div>
-                        <Badge variant="outline" className={`text-[10px] ml-2 shrink-0 ${c.status === 'Open' ? 'text-emerald-500 border-emerald-500/30' : 'text-slate-500 border-slate-700/50'}`}>{c.status}</Badge>
+                {/* 2. Summary Stats & Codes Row */}
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                  <Card className="bg-slate-900/40 backdrop-blur-md border-slate-700/50 hover:border-slate-700/50 transition-colors"><CardContent className="p-4 flex flex-col items-center justify-center text-center">
+                    <div className="text-sm font-bold text-sky-400 mb-1 tracking-widest bg-sky-500/10 px-3 py-1 rounded-md border border-sky-500/20">{property.access_code || "N/A"}</div>
+                    <div className="text-[10px] text-slate-500 uppercase font-bold tracking-wider mt-1">Tenant Access Code</div>
+                  </CardContent></Card>
+                  <Card className="bg-slate-900/40 backdrop-blur-md border-slate-700/50 hover:border-slate-700/50 transition-colors"><CardContent className="p-4 flex flex-col items-center">
+                    <div className="text-3xl font-bold text-red-500 mb-1">{cityData?.violations?.length || 0}</div>
+                    <div className="text-xs text-slate-500 uppercase font-bold tracking-wider">Violations</div>
+                  </CardContent></Card>
+                  <Card className="bg-slate-900/40 backdrop-blur-md border-slate-700/50 hover:border-slate-700/50 transition-colors"><CardContent className="p-4 flex flex-col items-center">
+                    <div className="text-3xl font-bold text-amber-500 mb-1">{cityData?.complaints?.length || 0}</div>
+                    <div className="text-xs text-slate-500 uppercase font-bold tracking-wider">Complaints</div>
+                  </CardContent></Card>
+                  <Card className="bg-slate-900/40 backdrop-blur-md border-slate-700/50 hover:border-slate-700/50 transition-colors"><CardContent className="p-4 flex flex-col items-center">
+                    <div className="text-3xl font-bold text-sky-400 mb-1">{cityData?.litigations?.length || 0}</div>
+                    <div className="text-xs text-slate-500 uppercase font-bold tracking-wider">Litigation</div>
+                  </CardContent></Card>
+                  <Card className="bg-slate-900/40 backdrop-blur-md border-slate-700/50 hover:border-slate-700/50 transition-colors"><CardContent className="p-4 flex flex-col items-center">
+                    <div className="text-3xl font-bold text-emerald-500 mb-1">{cityData?.charges?.length || 0}</div>
+                    <div className="text-xs text-slate-500 uppercase font-bold tracking-wider">Charges</div>
+                  </CardContent></Card>
+                </div>
+
+                {/* 3. Detailed Lists */}
+                <div className="grid md:grid-cols-2 gap-8">
+                  {/* HPD Violations */}
+                  <div className="space-y-4">
+                    <h3 className="font-bold text-white text-lg flex items-center gap-2"><AlertTriangle className="w-5 h-5 text-red-500" /> Open Violations</h3>
+                    {cityData?.violations?.length > 0 ? (
+                      <div className="space-y-3">
+                        {cityData.violations.slice(0, 5).map((v: any, i: number) => (
+                          <ViolationItem key={i} v={v} onGenerateAffidavit={handleGenerateAffidavit} isGenerating={isGeneratingId === (v.id || v.violationid)} />
+                        ))}
                       </div>
-                    ))}
+                    ) : <div className="text-zinc-600 text-sm italic">No open violations found.</div>}
                   </div>
-                ) : <div className="text-zinc-600 text-sm italic">No recent complaints found.</div>}
-              </div>
-            </div>
 
-            <div className="flex justify-end pt-6 border-t border-slate-700/50">
-              <Button variant="outline" onClick={onClose} className="mr-2 border-slate-700/50 text-gray-300 hover:text-white">Close</Button>
-              <Button className="bg-indigo-500 hover:bg-blue-700 text-white shadow-lg shadow-blue-900/20">Claim This Building</Button>
-            </div>
+                  {/* 311 Complaints */}
+                  <div className="space-y-4">
+                    <h3 className="font-bold text-white text-lg flex items-center gap-2"><Phone className="w-5 h-5 text-amber-500" /> Recent 311 Complaints</h3>
+                    {cityData?.complaints?.length > 0 ? (
+                      <div className="space-y-3">
+                        {cityData.complaints.slice(0, 5).map((c: any, i: number) => (
+                          <div key={i} className="bg-slate-950 border border-slate-700/50 p-3 rounded-lg flex justify-between items-start hover:bg-slate-900/40 backdrop-blur-md transition-colors">
+                            <div>
+                              <div className="font-medium text-orange-400 text-sm mb-1">{c.complaint_type}: {c.descriptor}</div>
+                              <div className="text-xs text-slate-500">Created: {c.created_date && new Date(c.created_date).toLocaleDateString()}</div>
+                            </div>
+                            <Badge variant="outline" className={`text-[10px] ml-2 shrink-0 ${c.status === 'Open' ? 'text-emerald-500 border-emerald-500/30' : 'text-slate-500 border-slate-700/50'}`}>{c.status}</Badge>
+                          </div>
+                        ))}
+                      </div>
+                    ) : <div className="text-zinc-600 text-sm italic">No recent complaints found.</div>}
+                  </div>
+                </div>
+
+                <div className="flex justify-end pt-6 border-t border-slate-700/50">
+                  <Button variant="outline" onClick={onClose} className="mr-2 border-slate-700/50 text-gray-300 hover:text-white">Close</Button>
+                  <Button className="bg-indigo-500 hover:bg-blue-700 text-white shadow-lg shadow-blue-900/20">Claim This Building</Button>
+                </div>
+              </>
+            )}
           </div>
         </motion.div>
 
@@ -1068,14 +1153,44 @@ export default function APP_ROOT() {
 
   // Fetch Data from Supabase
   useEffect(() => {
+    if (!userRole) return; // Wait until authenticated
+
     const fetchData = async () => {
-      const { data: props } = await supabase.from('properties').select('*')
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+
+      const role = user.user_metadata?.role || userRole;
+
+      // 1. Fetch Properties (Isolated for Managers)
+      let propsQuery = supabase.from('properties').select('*')
+      if (role === 'manager') {
+        propsQuery = propsQuery.eq('manager_id', user.id)
+      }
+      // Tenants might only need their specific property, but for now we isolate managers.
+      const { data: props } = await propsQuery
       if (props) setProperties(props)
 
+      // 2. Fetch Contractors (Global Pro Network)
       const { data: conts } = await supabase.from('contractors').select('*')
       if (conts) setContractors(conts)
 
-      const { data: reqs } = await supabase.from('requests').select('*')
+      // 3. Fetch Requests (Isolated for Managers)
+      let reqsQuery = supabase.from('requests').select('*')
+
+      if (role === 'manager') {
+        if (props && props.length > 0) {
+          const propIds = props.map(p => p.id)
+          reqsQuery = reqsQuery.in('property_id', propIds)
+        } else {
+          // Manager with no properties = no requests to see
+          setRequests([])
+          return
+        }
+      } else if (role === 'tenant') {
+        reqsQuery = reqsQuery.eq('tenant_id', user.id)
+      }
+
+      const { data: reqs } = await reqsQuery
       if (reqs) {
         const formatted = reqs.map((r: any) => ({
           ...r,
@@ -1086,7 +1201,7 @@ export default function APP_ROOT() {
       }
     }
     fetchData()
-  }, [])
+  }, [userRole])
 
   // Fetch Users for Admin
   useEffect(() => {
@@ -1105,6 +1220,8 @@ export default function APP_ROOT() {
   const [searchResults, setSearchResults] = useState<SearchResult[]>([])
   const [selectedLocation, setSelectedLocation] = useState<{ lat: number, lng: number, bin?: string, bbl?: string } | null>(null)
   const [isSearching, setIsSearching] = useState(false)
+  const [editingCompanyData, setEditingCompanyData] = useState<{ id: string, name: string, email: string, tier: string } | null>(null)
+  const [isEditingCompany, setIsEditingCompany] = useState(false)
 
   const [chatUser, setChatUser] = useState<Contractor | null>(null)
   const [chatMsg, setChatMsg] = useState("")
@@ -1385,6 +1502,8 @@ export default function APP_ROOT() {
   const [showForceAddManager, setShowForceAddManager] = useState(false)
   const [forceManagerData, setForceManagerData] = useState({ name: '', email: '', company: '' })
   const [forceManagerLoading, setForceManagerLoading] = useState(false)
+  const [newCompanyPassword, setNewCompanyPassword] = useState<string | null>(null)
+  const [isCopied, setIsCopied] = useState(false)
 
   const handleForceAddManager = async () => {
     setForceManagerLoading(true)
@@ -1420,6 +1539,13 @@ export default function APP_ROOT() {
         // Force Active status via RPC
         await supabase.rpc('approve_user', { target_id: data.user.id })
 
+        // Generate and assign Company Code using generic 'MC' prefix
+        const { data: generatedCode, error: codeErr } = await supabase.rpc('assign_company_code', {
+          target_id: data.user.id,
+          prefix: 'MC'
+        });
+        if (codeErr) console.error("Error generating company code:", codeErr);
+
         // Optimistic update
         setUsers([...users, {
           id: data.user.id,
@@ -1427,15 +1553,16 @@ export default function APP_ROOT() {
           role: 'manager',
           status: 'Active',
           full_name: forceManagerData.name,
+          company_code: generatedCode || null,
           created_at: new Date().toISOString()
         }])
         setShowForceAddManager(false)
         setForceManagerData({ name: '', email: '', company: '' })
-        alert(`Manager created successfully!\n\nTemporary password: ${tempPassword}\n\nPlease share this password securely with the new manager. They should change it on first login.`)
+        setNewCompanyPassword(tempPassword)
       }
     } catch (e: any) {
       console.error(e)
-      alert("Failed to add manager: " + e.message)
+      showToast("Failed to add manager: " + e.message, "error")
     } finally {
       setForceManagerLoading(false)
     }
@@ -1534,8 +1661,8 @@ export default function APP_ROOT() {
   }
 
   // Toast
-  const [toast, setToast] = useState<{ msg: string, type: 'success' | 'info' } | null>(null)
-  const showToast = (msg: string, type: 'success' | 'info' = 'success') => {
+  const [toast, setToast] = useState<{ msg: string, type: 'success' | 'info' | 'error' } | null>(null)
+  const showToast = (msg: string, type: 'success' | 'info' | 'error' = 'success') => {
     setToast({ msg, type })
     setTimeout(() => setToast(null), 3000)
   }
@@ -1585,14 +1712,47 @@ export default function APP_ROOT() {
   const selectAddress = (result: SearchResult) => {
     setNewPropAddr(result.display_name.split(',')[0]) // Keep it short for display
     setSelectedLocation({ lat: parseFloat(result.lat), lng: parseFloat(result.lon), bin: result.bin, bbl: result.bbl })
-    setSearchResults([]) // Clear results
+
+    // Attempt to auto-detect borough from the full display name
+    const lowerName = result.display_name.toLowerCase();
+    if (lowerName.includes("queens")) setNewPropBorough("Queens");
+    else if (lowerName.includes("brooklyn") || lowerName.includes("kings")) setNewPropBorough("Brooklyn");
+    else if (lowerName.includes("bronx")) setNewPropBorough("Bronx");
+    else if (lowerName.includes("staten island") || lowerName.includes("richmond")) setNewPropBorough("Staten Island");
+    else setNewPropBorough("Manhattan"); // Fallback or explicit manhattan/new york
   }
+
+  const [proofDocument, setProofDocument] = useState<File | null>(null)
+  const [newPropBorough, setNewPropBorough] = useState("Manhattan")
+  const [newPropUnits, setNewPropUnits] = useState(1)
 
   // LOGIC: Add Property (Updated with GeoSearch & Verification Safety)
   const handleAddProperty = async () => {
     if (!newPropAddr) {
       showToast("Please enter an address.", "info")
       return
+    }
+
+    // Duplicate Check
+    const { data: existingProps, error: duplicateError } = await supabase
+      .from('properties')
+      .select('id, address')
+      .ilike('address', newPropAddr)
+      .limit(1);
+
+    if (existingProps && existingProps.length > 0) {
+      showToast("This property address is already registered.", "error");
+      return;
+    }
+
+    // Tier Limit Check
+    if (userRole !== 'admin') {
+      const limit = getMaxPropertiesByTier(userProfile?.membership_tier);
+      const currentCount = properties.filter(p => p.manager_id === userProfile?.id).length;
+      if (currentCount >= limit) {
+        showToast("Plan limit reached. Please upgrade to add more properties.", "error");
+        return;
+      }
     }
 
     // Default location (NYC) if search failed
@@ -1605,18 +1765,47 @@ export default function APP_ROOT() {
       return
     }
 
+    // Upload proof document if provided
+    let proof_url = ""
+    if (proofDocument) {
+      const fileExt = proofDocument.name.split('.').pop()
+      const fileName = `${Math.random()}.${fileExt}`
+      const filePath = `${user.id}/${fileName}`
+
+      const { error: uploadError } = await supabase.storage.from('property_verifications').upload(filePath, proofDocument)
+      if (uploadError) {
+        showToast("Error uploading verification document", "info")
+        console.error(uploadError)
+      } else {
+        const { data } = supabase.storage.from('property_verifications').getPublicUrl(filePath)
+        proof_url = data.publicUrl
+      }
+    }
+
+    // Generate a random 6-character alphanumeric access code
+    const generatedCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+
     const newP = {
       address: newPropAddr,
-      borough: "Manhattan", // Default for now
-      units: Math.floor(Math.random() * 20) + 1,
+      borough: newPropBorough,
+      units: newPropUnits,
       status: "Pending Verification", // Safety Mechanism
       violations: 0,
+      access_code: generatedCode,
       lat,
       lng,
-      image: `https://source.unsplash.com/random/400x300/?building,newyork&sig=${Date.now()}`,
+      image: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
+        ? `https://maps.googleapis.com/maps/api/streetview?size=400x300&location=${lat},${lng}&key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}`
+        : `https://images.unsplash.com/photo-1496442226666-8d4d0e62e6e9?auto=format&fit=crop&q=80&w=400&h=300`,
       manager_id: user.id,
-      bin: selectedLocation?.bin || "",
-      bbl: selectedLocation?.bbl || ""
+      // Temporarily excluding bin and bbl due to missing columns in DB:
+      // bin: selectedLocation?.bin || "",
+      // bbl: selectedLocation?.bbl || ""
+    }
+
+    // Only attach verification_document_url if we actually uploaded one (might still fail if column is missing completely, but this is the correct implementation)
+    if (proof_url) {
+      (newP as any).verification_document_url = proof_url;
     }
 
     // Insert into Supabase
@@ -1624,9 +1813,12 @@ export default function APP_ROOT() {
 
     if (error) {
       showToast("Error adding property", 'info')
-      console.error(error)
+      console.error("Supabase Insert Error:", JSON.stringify(error, null, 2))
     } else if (data) {
       setProperties([...properties, data[0] as Property])
+      setNewPropAddr("")
+      setProofDocument(null)
+      setSearchResults([])
       showToast(`Property submitted. Pending verification!`)
       setNewPropAddr("")
       setSearchResults([])
@@ -1677,6 +1869,7 @@ export default function APP_ROOT() {
     </>
   )
   if (userRole === "tenant") return <TenantDashboard
+    userProfile={userProfile}
     onLogout={() => setUserRole(null)}
     onRequestSubmit={async (req: any) => {
       // Optimistic UI Update
@@ -1693,10 +1886,10 @@ export default function APP_ROOT() {
           status: 'Pending',
           priority: req.priority,
           contact_preference: req.contact_preference,
-          tenant_name: user.user_metadata?.full_name || 'Tenant',
-          unit: '4B (123 Broadway)', // Ideally dynamic, but good for now
+          tenant_name: req.tenantName || user.user_metadata?.full_name || 'Tenant',
+          unit: req.unit, // Passed from TenantDashboard state dynamically
           tenant_id: user.id,
-          property_id: user.user_metadata?.property_id // Link to Property for Manager Visibility
+          property_id: req.property_id || user.user_metadata?.property_id
         };
         const { error } = await supabase.from('requests').insert([payload]);
         if (error) {
@@ -1716,6 +1909,7 @@ export default function APP_ROOT() {
           <nav className="p-4 space-y-2 flex-1">
             {[
               { id: 'admin_overview', icon: LayoutDashboard, label: 'Overview' },
+              { id: 'admin_verifications', icon: ShieldCheck, label: 'Verifications' },
               { id: 'admin_managers', icon: Building2, label: 'Management Cos' },
               { id: 'admin_tenants', icon: Users, label: 'Tenants' },
               { id: 'admin_subadmins', icon: ShieldCheck, label: 'Sub-Admins' },
@@ -1802,6 +1996,106 @@ export default function APP_ROOT() {
             ) : null}
 
 
+            {/* ADMIN VERIFICATIONS TAB */}
+            {activeTab === 'admin_verifications' && (
+              <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <h2 className="text-2xl font-bold text-white flex items-center gap-2"><ShieldCheck className="w-6 h-6 text-purple-400" /> Pending Property Verifications</h2>
+                    <p className="text-slate-400 mt-1">Review proof of ownership documents submitted by managers for new properties.</p>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  {properties.filter(p => p.status === 'Pending Verification').length === 0 ? (
+                    <div className="text-center py-12 border border-slate-700/50 border-dashed rounded-xl bg-slate-900/40 backdrop-blur-md/50">
+                      <CheckCircle className="w-12 h-12 text-emerald-500/50 mx-auto mb-3" />
+                      <h3 className="text-lg font-bold text-white">All Caught Up!</h3>
+                      <p className="text-slate-500">There are no properties waiting for verification.</p>
+                    </div>
+                  ) : (
+                    properties.filter(p => p.status === 'Pending Verification').map(p => (
+                      <Card key={p.id} className="bg-slate-900/60 backdrop-blur-md border border-slate-700/50">
+                        <CardContent className="p-6 flex flex-col md:flex-row gap-6 justify-between items-start md:items-center">
+                          <div className="flex gap-4 items-start">
+                            <div className="w-12 h-12 rounded-lg bg-amber-500/20 text-amber-500 flex items-center justify-center shrink-0">
+                              <Building2 className="w-6 h-6" />
+                            </div>
+                            <div>
+                              <h3 className="text-lg font-bold text-white">{p.address}</h3>
+                              <div className="text-sm text-slate-400 flex items-center gap-2 mt-1">
+                                <span>{p.borough}</span> • <span>{p.units} Units</span>
+                                {p.bbl && <span>• BBL: {p.bbl}</span>}
+                              </div>
+                              <div className="text-xs text-sky-400 mt-2 font-mono">Submitted by Manager ID: {p.manager_id}</div>
+                            </div>
+                          </div>
+
+                          <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
+                            {p.verification_document_url ? (
+                              <Button
+                                variant="outline"
+                                className="border-slate-600 hover:bg-slate-800 text-slate-300 gap-2"
+                                onClick={() => window.open(p.verification_document_url, '_blank')}
+                              >
+                                <LayoutDashboard className="w-4 h-4" /> View Proof Document
+                              </Button>
+                            ) : (
+                              <div className="text-xs text-amber-500 bg-amber-500/10 px-3 py-2 rounded border border-amber-500/20 text-center">
+                                No document provided
+                              </div>
+                            )}
+
+                            <div className="flex gap-2">
+                              <Button
+                                className="bg-emerald-600 hover:bg-emerald-500 text-white flex-1 md:flex-none gap-2"
+                                onClick={async () => {
+                                  // Update DB
+                                  const { error } = await supabase.from('properties')
+                                    .update({ status: 'Good' })
+                                    .eq('id', p.id);
+
+                                  if (!error) {
+                                    setProperties(properties.map(prop => prop.id === p.id ? { ...prop, status: 'Good' } : prop))
+                                    showToast("Property Verified and Active!")
+                                  } else {
+                                    showToast("Error updating property", "info")
+                                  }
+                                }}
+                              >
+                                <CheckCircle className="w-4 h-4" /> Approve
+                              </Button>
+                              <Button
+                                variant="outline"
+                                className="border-red-500/30 text-red-400 hover:bg-red-500/10 flex-1 md:flex-none gap-2"
+                                onClick={async () => {
+                                  // Reject (Update status instead of delete to avoid RLS wipeout)
+                                  const { error } = await supabase.from('properties')
+                                    .update({ status: 'Rejected' })
+                                    .eq('id', p.id);
+
+                                  if (!error) {
+                                    setProperties(properties.map(prop => prop.id === p.id ? { ...prop, status: 'Rejected' } : prop))
+                                    showToast("Property Rejected")
+                                  } else {
+                                    showToast("Error rejecting property.", "error")
+                                    console.error("Reject Update Error:", error)
+                                  }
+                                }}
+                              >
+                                <X className="w-4 h-4" /> Reject
+                              </Button>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+
+
             {/* ADMIN USERS TAB */}
             {/* ADMIN USER MANAGEMENT TABS */}
             {
@@ -1831,14 +2125,25 @@ export default function APP_ROOT() {
                   <div className="border border-slate-700/50 rounded-lg overflow-hidden">
                     <table className="w-full text-left text-sm text-slate-400">
                       <thead className="bg-slate-900/40 backdrop-blur-md border-b border-slate-700/50 text-white uppercase text-xs font-bold">
-                        <tr>
-                          <th className="p-4">Name / ID</th>
-                          <th className="p-4">Email</th>
-                          <th className="p-4">Role</th>
-                          <th className="p-4">Joined</th>
-                          <th className="p-4">Status</th>
-                          <th className="p-4 text-right">Actions</th>
-                        </tr>
+                        {activeTab === 'admin_managers' ? (
+                          <tr>
+                            <th className="p-4">Company / Manager Name</th>
+                            <th className="p-4">Email</th>
+                            <th className="p-4">Properties</th>
+                            <th className="p-4">Plan Type</th>
+                            <th className="p-4">Status</th>
+                            <th className="p-4 text-right">Actions</th>
+                          </tr>
+                        ) : (
+                          <tr>
+                            <th className="p-4">Name / ID</th>
+                            <th className="p-4">Email</th>
+                            <th className="p-4">Role</th>
+                            <th className="p-4">Joined</th>
+                            <th className="p-4">Status</th>
+                            <th className="p-4 text-right">Actions</th>
+                          </tr>
+                        )}
                       </thead>
                       <tbody className="divide-y divide-slate-800/50 bg-slate-900/40 backdrop-blur-md/50">
                         {users.filter(u => {
@@ -1856,16 +2161,90 @@ export default function APP_ROOT() {
                             return false;
                           }).map(u => (
                             <tr key={u.id} className="hover:bg-slate-800/40/50 transition-colors">
-                              <td className="p-4 font-medium text-white">{u.full_name || u.id.slice(0, 8)}</td>
-                              <td className="p-4">{u.email}</td>
-                              <td className="p-4"><Badge variant="secondary" className="bg-slate-800/40 text-zinc-300">{u.role}</Badge></td>
-                              <td className="p-4">{new Date(u.created_at).toLocaleDateString()}</td>
+                              {activeTab === 'admin_managers' ? (
+                                <>
+                                  <td className="p-4 font-medium text-white flex items-center">
+                                    {u.full_name || u.id.slice(0, 8)}
+                                    {u.company_code && (
+                                      <span className="ml-2 px-2 py-0.5 bg-indigo-500/20 text-indigo-300 text-xs font-mono rounded-md border border-indigo-500/30">
+                                        {u.company_code}
+                                      </span>
+                                    )}
+                                  </td>
+                                  <td className="p-4">{u.email}</td>
+                                  <td className="p-4">
+                                    <Badge variant="secondary" className="bg-slate-800/40 text-sky-400 hover:bg-slate-800/60">
+                                      {properties.filter(p => p.manager_id === u.id).length} Managed
+                                    </Badge>
+                                  </td>
+                                  <td className="p-4">
+                                    <Badge className={`${u.membership_tier === 'Growth' ? 'bg-sky-500/20 text-sky-400' : u.membership_tier === 'Starter' ? 'bg-slate-800 text-slate-300' : 'bg-purple-500/20 text-purple-400'} border-0`}>
+                                      {u.membership_tier || 'Free'}
+                                    </Badge>
+                                  </td>
+                                </>
+                              ) : (
+                                <>
+                                  <td className="p-4 font-medium text-white">{u.full_name || u.id.slice(0, 8)}</td>
+                                  <td className="p-4">{u.email}</td>
+                                  <td className="p-4"><Badge variant="secondary" className="bg-slate-800/40 text-zinc-300">{u.role}</Badge></td>
+                                  <td className="p-4">{new Date(u.created_at).toLocaleDateString()}</td>
+                                </>
+                              )}
                               <td className="p-4">
                                 <Badge className={u.status === 'Active' ? 'bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20' : u.status === 'Suspended' ? 'bg-red-500/10 text-red-500' : 'bg-amber-400/10 text-amber-400'}>
                                   {u.status}
                                 </Badge>
                               </td>
-                              <td className="p-4 text-right">
+                              <td className="p-4 text-right whitespace-nowrap">
+                                {activeTab === 'admin_managers' && (
+                                  <>
+                                    <Button size="icon" variant="outline" title="Reset Password" className="border-amber-700/50 text-amber-500 hover:text-white hover:bg-amber-500/10 mr-2" onClick={async () => {
+                                      if (confirm(`Are you sure you want to completely RESET the password for ${u.full_name || u.email}? This will log them out and they will need the new temporary password.`)) {
+                                        setForceManagerLoading(true);
+                                        try {
+                                          // Generate a secure random password locally
+                                          const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$%';
+                                          const randomValues = crypto.getRandomValues(new Uint16Array(12));
+                                          const tempPassword = Array.from(randomValues, v => chars[v % chars.length]).join('');
+
+                                          // Get current admin user ID securely
+                                          const { data: { user: currentUser } } = await supabase.auth.getUser();
+                                          if (!currentUser) throw new Error('Not authenticated');
+
+                                          const response = await fetch('/api/admin/reset-password', {
+                                            method: 'POST',
+                                            headers: { 'Content-Type': 'application/json' },
+                                            body: JSON.stringify({
+                                              target_id: u.id,
+                                              new_password: tempPassword,
+                                              request_user_id: currentUser.id // Needs to be the active admin's user ID
+                                            })
+                                          });
+
+                                          if (!response.ok) {
+                                            const errorData = await response.json();
+                                            throw new Error(errorData.error || 'Failed to reset password');
+                                          }
+
+                                          // Pop up the same success modal we use for Make Manager
+                                          setNewCompanyPassword(tempPassword);
+
+                                        } catch (e: any) {
+                                          console.error(e);
+                                          showToast(e.message, 'error');
+                                        } finally {
+                                          setForceManagerLoading(false);
+                                        }
+                                      }
+                                    }}>
+                                      <Lock className="w-4 h-4" />
+                                    </Button>
+                                    <Button size="sm" variant="outline" className="border-slate-700/50 text-sky-400 hover:text-white hover:bg-sky-500/10 mr-2" onClick={() => {
+                                      setEditingCompanyData({ id: u.id, name: u.full_name || '', email: u.email, tier: u.membership_tier || 'Free' });
+                                    }}>Edit</Button>
+                                  </>
+                                )}
                                 {(u.status === 'Pending' || u.status === 'Suspended') && (
                                   <Button size="sm" className="bg-emerald-600 hover:bg-green-700 text-white" onClick={async () => {
                                     const { error } = await supabase.rpc('approve_user', { target_id: u.id });
@@ -1912,6 +2291,97 @@ export default function APP_ROOT() {
                             <Button variant="ghost" onClick={() => setShowForceAddManager(false)}>Cancel</Button>
                             <Button className="bg-indigo-500 hover:bg-blue-700" onClick={handleForceAddManager} disabled={!forceManagerData.email || forceManagerLoading}>
                               {forceManagerLoading ? 'Creating...' : 'Create Account'}
+                            </Button>
+                          </div>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+
+                  {/* NEW COMPANY PASSWORD MODAL */}
+                  <AnimatePresence>
+                    {newCompanyPassword && (
+                      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[9999] bg-black/80 flex items-center justify-center p-4">
+                        <div className="bg-slate-900/40 backdrop-blur-md border border-emerald-500/50 p-6 rounded-xl w-full max-w-sm space-y-4 relative shadow-[0_0_30px_rgba(16,185,129,0.15)]">
+                          <div className="flex justify-center mb-2">
+                            <div className="bg-emerald-500/20 p-3 rounded-full">
+                              <CheckCircle className="w-8 h-8 text-emerald-400" />
+                            </div>
+                          </div>
+                          <h3 className="text-xl font-bold text-white text-center">Password Generated!</h3>
+                          <p className="text-slate-400 text-sm text-center">
+                            The secure temporary password has been successfully generated. Please securely share it.
+                          </p>
+                          <div className="bg-slate-950/50 p-4 border border-slate-800 rounded-lg flex items-center justify-between mt-4">
+                            <code className="text-emerald-400 font-mono text-lg">{newCompanyPassword}</code>
+                            <Button size="icon" variant="ghost" className={`${isCopied ? "text-emerald-400 bg-emerald-500/10" : "text-slate-400 hover:text-white"}`} onClick={() => {
+                              navigator.clipboard.writeText(newCompanyPassword);
+                              setIsCopied(true);
+                              showToast("Password copied to clipboard!");
+                              setTimeout(() => setIsCopied(false), 2000);
+                            }}>
+                              {isCopied ? <Check className="w-5 h-5" /> : <Copy className="w-5 h-5" />}
+                            </Button>
+                          </div>
+                          <div className="text-center mt-6 pt-4 border-t border-slate-800">
+                            <Button className="w-full bg-slate-800 hover:bg-slate-700 text-white" onClick={() => setNewCompanyPassword(null)}>
+                              Close
+                            </Button>
+                          </div>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+
+                  {/* EDIT COMPANY MODAL */}
+                  <AnimatePresence>
+                    {editingCompanyData && (
+                      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[9999] bg-black/80 flex items-center justify-center p-4">
+                        <div className="bg-slate-900/40 backdrop-blur-md border border-slate-700/50 p-6 rounded-xl w-full max-w-sm space-y-4 relative">
+                          <h3 className="text-xl font-bold text-white mb-4">Edit Management Company</h3>
+                          <div className="space-y-3">
+                            <div>
+                              <label className="text-xs text-slate-400 mb-1 block">Company / Manager Name</label>
+                              <Input placeholder="Company Name" value={editingCompanyData.name} onChange={e => setEditingCompanyData({ ...editingCompanyData, name: e.target.value })} className="bg-slate-800/40 border-slate-700/50 text-white" />
+                            </div>
+                            <div>
+                              <label className="text-xs text-slate-400 mb-1 block">Email (Cannot be changed directly)</label>
+                              <Input disabled value={editingCompanyData.email} className="bg-slate-900/60 border-slate-700/50 text-slate-500 cursor-not-allowed" />
+                            </div>
+                            <div>
+                              <label className="text-xs text-slate-400 mb-1 block">Plan Tier</label>
+                              <select
+                                className="w-full bg-slate-800/40 border-slate-700/50 text-white rounded-md p-2 text-sm outline-none focus:border-indigo-500"
+                                value={editingCompanyData.tier}
+                                onChange={e => setEditingCompanyData({ ...editingCompanyData, tier: e.target.value })}
+                              >
+                                <option value="Free">Free</option>
+                                <option value="Starter">Starter</option>
+                                <option value="Growth">Growth</option>
+                              </select>
+                            </div>
+                          </div>
+                          <div className="flex justify-end gap-2 mt-6">
+                            <Button variant="ghost" onClick={() => setEditingCompanyData(null)}>Cancel</Button>
+                            <Button className="bg-indigo-500 hover:bg-blue-700 text-white" disabled={isEditingCompany} onClick={async () => {
+                              setIsEditingCompany(true);
+                              const { error } = await supabase.rpc('update_company_profile', {
+                                target_id: editingCompanyData.id,
+                                new_name: editingCompanyData.name,
+                                new_tier: editingCompanyData.tier
+                              });
+
+                              if (!error) {
+                                setUsers(users.map(u => u.id === editingCompanyData.id ? { ...u, full_name: editingCompanyData.name, membership_tier: editingCompanyData.tier } : u));
+                                showToast("Company details updated!");
+                                setEditingCompanyData(null);
+                              } else {
+                                showToast("Error updating company.", 'error');
+                                console.error("Edit Company Error:", error);
+                              }
+                              setIsEditingCompany(false);
+                            }}>
+                              {isEditingCompany ? 'Saving...' : 'Save Changes'}
                             </Button>
                           </div>
                         </div>
@@ -2166,7 +2636,7 @@ export default function APP_ROOT() {
         )}
 
         <nav className="p-4 space-y-2 flex-1">
-          {[{ id: 'dashboard', icon: LayoutDashboard, label: 'Overview' }, { id: 'requests', icon: ClipboardList, label: 'Requests', badge: requests.filter(r => r.status === 'Pending').length }, { id: 'map', icon: MapIcon, label: 'Map' }, { id: 'properties', icon: Building2, label: 'Properties' }, { id: 'calendar', icon: Calendar, label: 'Compliance Calendar' }, { id: 'll97', icon: Flame, label: 'LL97 Simulator' }, { id: 'contractors', icon: Users, label: 'Pro Network' }, { id: 'settings', icon: Settings, label: 'Settings' }].map(i => (
+          {[{ id: 'dashboard', icon: LayoutDashboard, label: 'Overview' }, { id: 'requests', icon: ClipboardList, label: 'Requests', badge: requests.filter(r => r.status === 'Pending').length }, { id: 'map', icon: MapIcon, label: 'Map' }, { id: 'properties', icon: Building2, label: 'Properties' }, { id: 'manager_tenants', icon: Users, label: 'Tenants' }, { id: 'calendar', icon: Calendar, label: 'Compliance Calendar' }, { id: 'll97', icon: Flame, label: 'LL97 Simulator' }, { id: 'contractors', icon: Users, label: 'Pro Network' }, { id: 'settings', icon: Settings, label: 'Settings' }].map(i => (
             <button key={i.id} onClick={() => setActiveTab(i.id)} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${activeTab === i.id ? 'bg-primary/10 text-primary shadow-sm shadow-sky-400/10' : 'hover:bg-secondary text-slate-400 hover:text-white'}`}>
               <i.icon className="w-5 h-5" /> {i.label} {i.badge ? <span className="ml-auto bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full shadow-lg shadow-red-500/40">{i.badge}</span> : null}
             </button>
@@ -2196,617 +2666,774 @@ export default function APP_ROOT() {
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto p-8 space-y-8 bg-slate-950/20">
-          {/* DASHBOARD */}
-          {activeTab === 'dashboard' && (
-            <div className="space-y-6">
-              <div className="grid grid-cols-4 gap-6">
-                <Card className="bg-card/50"><CardContent className="p-6">Properties<h3 className="text-2xl font-bold">{properties.length}</h3></CardContent></Card>
-                <Card className="bg-card/50"><CardContent className="p-6">Requests<h3 className="text-2xl font-bold text-orange-400">{requests.filter(r => r.status === 'Pending').length}</h3></CardContent></Card>
-              </div>
-              <div className="h-[400px] rounded-xl overflow-hidden border border-border"><MapViewer properties={properties} onSelectProperty={setManageProp} /></div>
-            </div>
-          )}
-
-          {/* REQUESTS */}
-          {activeTab === 'requests' && (
-            <div className="space-y-4">
-              <h2 className="text-2xl font-bold">Tenant Requests</h2>
-              {requests.map(r => (
-                <Card key={r.id} className="bg-card/50 hover:bg-card/80 cursor-pointer transition-all group" onClick={() => setSelectedRequest(r)}>
-                  <CardContent className="p-6 flex justify-between items-center">
-                    <div className="flex gap-4 items-center">
-                      <div className="w-10 h-10 rounded-full bg-sky-400/20 flex justify-center items-center text-sky-400 group-hover:scale-110 transition-transform"><Wrench className="w-5 h-5" /></div>
-                      <div>
-                        <h4 className="font-bold flex items-center gap-2">
-                          {r.issue}
-                          {r.assigned_pro_id && <Badge variant="outline" className="text-[10px] h-5 bg-purple-500/10 text-purple-400 border-purple-500/20">Assigned</Badge>}
-                        </h4>
-                        <p className="text-sm text-muted-foreground">{r.tenantName || r.tenant_name} • {r.unit}</p>
-                      </div>
-                    </div>
-                    <div className="flex gap-2">
-                      <Badge className={`${r.status === 'Pending' ? 'bg-amber-500' : r.status === 'Resolved' ? 'bg-emerald-500' : 'bg-sky-400'} hover:bg-opacity-80 transition-colors`}>{r.status}</Badge>
-                      <Button size="sm" variant="outline" className="invisible group-hover:visible" onClick={(e) => { e.stopPropagation(); setSelectedRequest(r); }}>
-                        Manage
-                      </Button>
-                    </div>
-                  </CardContent></Card>
-              ))}
-            </div>
-          )}
-
-          {/* PROPERTIES */}
-          {activeTab === 'properties' && (
-            <div className="grid grid-cols-3 gap-6">
-              {properties.map(p => (
-                <Card key={p.id} className="bg-card/50 overflow-hidden group">
-                  <div className="h-48 relative"><img src={p.image} className="w-full h-full object-cover" /><Badge className="absolute top-2 right-2">{p.status}</Badge></div>
-                  <CardContent className="p-4">
-                    <h3 className="font-bold">{p.address}</h3>
-                    <p className="text-sm text-muted-foreground mb-2">{p.units} Units</p>
-                    <div className="flex items-center gap-2 mb-4 text-xs text-slate-500 bg-slate-900/40 backdrop-blur-md/50 p-2 rounded border border-slate-700/50">
-                      <Lock className="w-3 h-3" />
-                      Access Code: <span className="text-zinc-300 font-mono font-bold tracking-widest">{p.access_code || 'N/A'}</span>
-                    </div>
-                    <Button className="w-full" variant="outline" onClick={() => setManageProp(p)}>Manage Details</Button>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          )}
-
-          {/* COMPLIANCE CALENDAR */}
-          {activeTab === 'calendar' && (
-            <div className="space-y-6">
-              <div className="flex justify-between items-start">
-                <div>
-                  <h2 className="text-2xl font-bold flex items-center gap-2"><Calendar className="w-6 h-6 text-sky-400" /> Compliance Calendar</h2>
-                  <p className="text-muted-foreground mt-1">Track key deadlines for all major NYC local laws across your portfolio.</p>
-                </div>
-                {/* Upgrade Placeholder CTA */}
-                {(!userProfile?.membership_tier || userProfile.membership_tier === 'Free') && (
-                  <Button className="bg-indigo-500 hover:bg-indigo-500 text-white gap-2" onClick={() => {
-                    // Dummy handler for upgrade
-                    alert("This will redirect to Stripe Checkout to upgrade your tier to Pro ($29/mo).")
-                  }}>
-                    <ArrowUpCircle className="w-4 h-4" /> Unlock Pro Features
-                  </Button>
-                )}
-              </div>
-
-              {properties.length === 0 ? (
-                <div className="p-8 text-center bg-slate-900/40 backdrop-blur-md/50 border border-slate-700/50 rounded-xl relative overflow-hidden group">
-                  <Flame className="w-12 h-12 mx-auto text-zinc-700 mb-4 group-hover:text-slate-500 transition-colors" />
-                  <h3 className="text-xl font-bold text-white mb-2">No Properties Found</h3>
-                  <p className="text-slate-400 mb-6">Add a property to start tracking its NYC compliance deadlines (LL97, LL84, LL11, etc.).</p>
-                  <Button className="bg-indigo-500 text-white hover:bg-sky-400" onClick={() => setShowAddProperty(true)}>
-                    <Building2 className="w-4 h-4 mr-2" /> Add Your First Property
-                  </Button>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {properties.map(p => (
-                    <Card key={p.id} className="bg-card/50 border-slate-700/50 flex flex-col">
-                      <CardHeader className="border-b border-slate-800/50 pb-4 bg-slate-900/40 backdrop-blur-md/30">
-                        <CardTitle className="text-lg flex items-center justify-between">
-                          <span className="truncate pr-4">{p.address}</span>
-                          <Badge variant="outline" className="shrink-0">{p.units} Units</Badge>
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent className="p-0 flex-1">
-                        <div className="divide-y divide-slate-800/50/50">
-                          {/* LL97 */}
-                          <div className="p-4 flex items-center justify-between hover:bg-slate-800/40/30 transition-colors">
-                            <div className="flex items-center gap-3">
-                              <div className="w-8 h-8 rounded-full bg-amber-500/20 flex items-center justify-center"><Flame className="w-4 h-4 text-amber-500" /></div>
-                              <div>
-                                <div className="text-sm font-bold">LL97 (Carbon)</div>
-                                <div className="text-xs text-slate-500">Report Due</div>
-                              </div>
-                            </div>
-                            <div className="text-right">
-                              <div className="text-sm font-bold text-white">May 1, 2025</div>
-                              <Badge variant="default" className="text-[10px] bg-red-500 mt-1">Action Req</Badge>
-                            </div>
-                          </div>
-                          {/* LL84 */}
-                          <div className="p-4 flex items-center justify-between hover:bg-slate-800/40/30 transition-colors">
-                            <div className="flex items-center gap-3">
-                              <div className="w-8 h-8 rounded-full bg-sky-400/20 flex items-center justify-center"><Zap className="w-4 h-4 text-sky-400" /></div>
-                              <div>
-                                <div className="text-sm font-bold">LL84 (Energy)</div>
-                                <div className="text-xs text-slate-500">Benchmarking</div>
-                              </div>
-                            </div>
-                            <div className="text-right">
-                              <div className="text-sm font-bold text-white">May 1, 2025</div>
-                              <Badge variant="outline" className="text-[10px] text-orange-400 border-amber-500/50 mt-1">Approaching</Badge>
-                            </div>
-                          </div>
-                          {/* LL11 */}
-                          <div className="p-4 flex items-center justify-between hover:bg-slate-800/40/30 transition-colors">
-                            <div className="flex items-center gap-3">
-                              <div className="w-8 h-8 rounded-full bg-purple-500/20 flex items-center justify-center"><Building2 className="w-4 h-4 text-purple-500" /></div>
-                              <div>
-                                <div className="text-sm font-bold">LL11 (FISP)</div>
-                                <div className="text-xs text-slate-500">Facade Inspect</div>
-                              </div>
-                            </div>
-                            <div className="text-right">
-                              <div className="text-sm font-bold text-slate-400">Cycle 10</div>
-                              <Badge variant="outline" className="text-[10px] text-slate-500 border-gray-700 mt-1">Pending Block</Badge>
-                            </div>
-                          </div>
-                          {/* LL152 */}
-                          <div className="p-4 flex items-center justify-between hover:bg-slate-800/40/30 transition-colors">
-                            <div className="flex items-center gap-3">
-                              <div className="w-8 h-8 rounded-full bg-zinc-700 flex items-center justify-center"><Scale className="w-4 h-4 text-gray-300" /></div>
-                              <div>
-                                <div className="text-sm font-bold">LL152 (Gas)</div>
-                                <div className="text-xs text-slate-500">Piping System</div>
-                              </div>
-                            </div>
-                            <div className="text-right">
-                              <div className="text-sm font-bold text-slate-400">Dec 31, 2025</div>
-                              <Badge variant="outline" className="text-[10px] text-slate-500 border-gray-700 mt-1">On Track</Badge>
-                            </div>
-                          </div>
-                        </div>
-                      </CardContent>
-                      {(!userProfile?.membership_tier || userProfile.membership_tier === 'Free') && (
-                        <div className="p-4 bg-indigo-500/10 border-t border-indigo-500/20 text-center">
-                          <p className="text-xs text-indigo-300 mb-2">Automated alerts available in Pro.</p>
-                          <Button size="sm" variant="outline" className="w-full border-indigo-500/50 text-indigo-400 hover:bg-indigo-500/20" onClick={() => alert("Upgrade to Pro to unlock automated D-30 and D-7 reminders via Email/SMS.")}>Enable Alerts</Button>
-                        </div>
-                      )}
-                    </Card>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* LL97 CARBON LAW SIMULATOR */}
-          {activeTab === 'll97' && (
-            <div className="space-y-6">
-              <div>
-                <h2 className="text-2xl font-bold flex items-center gap-2"><Flame className="w-6 h-6 text-amber-500" /> LL97 Carbon Emissions Simulator</h2>
-                <p className="text-muted-foreground mt-1">Estimate your building's compliance with NYC Local Law 97 (Climate Mobilization Act) and calculate potential penalties.</p>
-              </div>
-
-              {/* Input Form */}
-              <Card className="bg-card/50 border-slate-700/50">
-                <CardHeader>
-                  <CardTitle className="text-lg">Building Information</CardTitle>
-                  <CardDescription>Enter details about your property to simulate LL97 compliance. Select an existing property or enter manually.</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {/* Quick select from existing properties */}
-                  {properties.length > 0 && (
-                    <div>
-                      <label className="text-xs text-slate-400 mb-1 block">Quick Select Property</label>
-                      <div className="flex flex-wrap gap-2">
-                        {properties.map(p => (
-                          <Button key={p.id} size="sm" variant="outline" className="text-xs border-slate-700/50 hover:border-sky-400 hover:text-sky-300" onClick={() => runLL97Simulation(p)}>
-                            <Building2 className="w-3 h-3 mr-1" /> {p.address}
-                          </Button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div>
-                      <label className="text-xs text-slate-400 mb-1 block">Approx. Square Footage</label>
-                      <Input placeholder="e.g. 50000" value={ll97Props.squareFootage} onChange={e => setLl97Props({ ...ll97Props, squareFootage: e.target.value })} className="bg-slate-800/40 border-slate-600/50" />
-                    </div>
-                    <div>
-                      <label className="text-xs text-slate-400 mb-1 block">Primary Heating Fuel</label>
-                      <select className="w-full bg-slate-800/40 border border-slate-600/50 text-white rounded-md p-2 text-sm" value={ll97Props.heatingFuel} onChange={e => setLl97Props({ ...ll97Props, heatingFuel: e.target.value })}>
-                        <option value="Natural Gas">Natural Gas</option>
-                        <option value="#2 Fuel Oil">#2 Fuel Oil</option>
-                        <option value="#4 Fuel Oil">#4 Fuel Oil</option>
-                        <option value="Electric (Grid)">Electric (Grid)</option>
-                        <option value="Steam (District)">Steam (District)</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="text-xs text-slate-400 mb-1 block">Building Type</label>
-                      <select className="w-full bg-slate-800/40 border border-slate-600/50 text-white rounded-md p-2 text-sm" value={ll97Props.buildingType} onChange={e => setLl97Props({ ...ll97Props, buildingType: e.target.value })}>
-                        <option value="Multifamily Residential">Multifamily Residential</option>
-                        <option value="Office">Office</option>
-                        <option value="Retail">Retail</option>
-                        <option value="Mixed Use">Mixed Use</option>
-                        <option value="Hotel">Hotel</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="text-xs text-slate-400 mb-1 block">Year Built</label>
-                      <Input placeholder="e.g. 1960" value={ll97Props.yearBuilt} onChange={e => setLl97Props({ ...ll97Props, yearBuilt: e.target.value })} className="bg-slate-800/40 border-slate-600/50" />
-                    </div>
-                  </div>
-
-                  <Button className="bg-orange-600 hover:bg-orange-700 text-white gap-2" onClick={() => runLL97Simulation(properties[0])} disabled={ll97Loading}>
-                    {ll97Loading ? <><Activity className="w-4 h-4 animate-spin" /> Simulating...</> : <><Flame className="w-4 h-4" /> Run LL97 Simulation</>}
-                  </Button>
-                </CardContent>
-              </Card>
-
-              {/* Results */}
-              {ll97Result && (
-                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
-                  {/* Status Banner */}
-                  <div className={`p-6 rounded-xl border ${ll97Result.risk_level === 'Critical' ? 'bg-red-500/10 border-red-500/30' : ll97Result.risk_level === 'High' ? 'bg-amber-500/10 border-amber-500/30' : ll97Result.risk_level === 'Medium' ? 'bg-amber-400/10 border-amber-400/30' : 'bg-emerald-500/10 border-emerald-500/30'}`}>
-                    <div className="flex items-center justify-between mb-3">
-                      <h3 className="text-xl font-bold flex items-center gap-2">
-                        {ll97Result.risk_level === 'Critical' || ll97Result.risk_level === 'High' ? <AlertTriangle className="w-6 h-6 text-red-500" /> : <CheckCircle className="w-6 h-6 text-emerald-500" />}
-                        {ll97Result.compliance_status}
+        <ErrorBoundary>
+          <div className="flex-1 overflow-y-auto p-8 space-y-8 bg-slate-950/20">
+            {/* DASHBOARD */}
+            {activeTab === 'dashboard' && (
+              <div className="space-y-6">
+                <div className="grid grid-cols-4 gap-6">
+                  <Card className="bg-card/50">
+                    <CardContent className="p-6">Properties
+                      <h3 className="text-2xl font-bold">
+                        {properties.filter(p => !['Pending Verification', 'Rejected'].includes(p.status || '')).length}
                       </h3>
-                      <Badge className={`text-sm px-3 py-1 ${ll97Result.risk_level === 'Critical' ? 'bg-red-500' : ll97Result.risk_level === 'High' ? 'bg-amber-500' : ll97Result.risk_level === 'Medium' ? 'bg-amber-400 text-black' : 'bg-emerald-500'}`}>
-                        {ll97Result.risk_level} Risk
-                      </Badge>
-                    </div>
-                    <p className="text-zinc-300">{ll97Result.summary}</p>
-                  </div>
-
-                  {/* Emission Stats */}
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <Card className="bg-slate-900/40 backdrop-blur-md border-slate-700/50"><CardContent className="p-4 text-center">
-                      <div className="text-3xl font-bold text-white mb-1">{ll97Result.estimated_emissions_tco2e}</div>
-                      <div className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">tCO₂e / Year</div>
-                    </CardContent></Card>
-                    <Card className="bg-slate-900/40 backdrop-blur-md border-slate-700/50"><CardContent className="p-4 text-center">
-                      <div className="text-3xl font-bold text-sky-300 mb-1">{ll97Result.phase1_limit_tco2e}</div>
-                      <div className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Phase 1 Limit (2024-29)</div>
-                    </CardContent></Card>
-                    <Card className="bg-slate-900/40 backdrop-blur-md border-slate-700/50"><CardContent className="p-4 text-center">
-                      <div className="text-3xl font-bold text-purple-400 mb-1">{ll97Result.phase2_limit_tco2e}</div>
-                      <div className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Phase 2 Limit (2030-34)</div>
-                    </CardContent></Card>
-                    <Card className="bg-slate-900/40 backdrop-blur-md border-slate-700/50"><CardContent className="p-4 text-center">
-                      <div className="text-3xl font-bold text-red-400 mb-1">{ll97Result.total_10yr_penalty_risk}</div>
-                      <div className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">10-Year Penalty Risk</div>
-                    </CardContent></Card>
-                  </div>
-
-                  {/* Annual Penalties */}
-                  <div className="grid grid-cols-2 gap-4">
-                    <Card className="bg-slate-900/40 backdrop-blur-md border-slate-700/50"><CardContent className="p-5">
-                      <div className="text-xs text-slate-500 uppercase font-bold tracking-wider mb-2">Phase 1 Annual Penalty (2024-2029)</div>
-                      <div className="text-2xl font-bold text-white">${ll97Result.phase1_penalty_annual?.toLocaleString() || '0'}</div>
-                      <div className="text-xs text-slate-400 mt-1">$268/ton over limit</div>
-                    </CardContent></Card>
-                    <Card className="bg-slate-900/40 backdrop-blur-md border-slate-700/50"><CardContent className="p-5">
-                      <div className="text-xs text-slate-500 uppercase font-bold tracking-wider mb-2">Phase 2 Annual Penalty (2030-2034)</div>
-                      <div className="text-2xl font-bold text-orange-400">${ll97Result.phase2_penalty_annual?.toLocaleString() || '0'}</div>
-                      <div className="text-xs text-slate-400 mt-1">Stricter limits apply</div>
-                    </CardContent></Card>
-                  </div>
-
-                  {/* Retrofit Recommendations */}
-                  {ll97Result.retrofits?.length > 0 && (
-                    <Card className="bg-slate-900/40 backdrop-blur-md border-slate-700/50">
-                      <CardHeader>
-                        <CardTitle className="text-lg flex items-center gap-2"><Wrench className="w-5 h-5 text-sky-400" /> Recommended Retrofits</CardTitle>
-                      </CardHeader>
-                      <CardContent className="space-y-3">
-                        {ll97Result.retrofits.map((r: any, i: number) => (
-                          <div key={i} className="flex items-start gap-4 p-4 bg-slate-950 border border-slate-700/50 rounded-lg">
-                            <div className={`w-2 h-2 rounded-full mt-2 ${r.priority === 'High' ? 'bg-red-500' : r.priority === 'Medium' ? 'bg-amber-400' : 'bg-emerald-500'}`} />
-                            <div className="flex-1">
-                              <div className="font-bold text-white text-sm">{r.action}</div>
-                              <div className="text-xs text-slate-400 mt-1">Cost: {r.estimated_cost} • Emission Reduction: {r.emission_reduction_pct}% • Payback: {r.payback_years} years</div>
-                            </div>
-                            <Badge variant="outline" className={`shrink-0 text-[10px] ${r.priority === 'High' ? 'text-red-400 border-red-500/30' : 'text-emerald-400 border-emerald-500/30'}`}>{r.priority}</Badge>
-                          </div>
-                        ))}
-                      </CardContent>
-                    </Card>
-                  )}
-
-                  {/* Timeline */}
-                  {ll97Result.compliance_timeline && (
-                    <div className="p-4 bg-blue-900/10 border border-sky-400/20 rounded-xl">
-                      <div className="flex items-center gap-2 text-sky-300 font-bold text-sm mb-1"><Clock className="w-4 h-4" /> Compliance Timeline</div>
-                      <p className="text-zinc-300 text-sm">{ll97Result.compliance_timeline}</p>
-                    </div>
-                  )}
-                </motion.div>
-              )}
-            </div>
-          )}
-
-          {/* LL97 SIMULATOR TAB */}
-          {activeTab === 'll97' && (
-            <div className="space-y-6 max-w-5xl">
-              <div className="flex justify-between items-start">
-                <div>
-                  <h2 className="text-2xl font-bold flex items-center gap-2 text-emerald-400"><Leaf className="w-6 h-6" /> Local Law 97 Simulator</h2>
-                  <p className="text-muted-foreground mt-1">Estimate carbon emissions, visualize penalty timelines, and discover ROI for green retrofits.</p>
-                </div>
-              </div>
-
-              <div className="grid md:grid-cols-3 gap-6">
-                {/* Left Column: Input Form */}
-                <div className="md:col-span-1 space-y-4">
-                  <Card className="bg-slate-900/40 backdrop-blur-md border border-slate-700/50">
-                    <CardHeader className="pb-4">
-                      <CardTitle className="text-lg text-white">Building Profile</CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      <div className="space-y-2">
-                        <label className="text-xs font-bold text-slate-400 uppercase">Property Address *</label>
-                        <Input placeholder="e.g. 123 Broadway, NY" className="bg-slate-950 border-slate-700/50 text-white" value={ll97Props.address} onChange={e => setLl97Props({ ...ll97Props, address: e.target.value })} />
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-xs font-bold text-slate-400 uppercase">Square Footage *</label>
-                        <Input type="number" placeholder="e.g. 50000" className="bg-slate-950 border-slate-700/50 text-white" value={ll97Props.squareFootage} onChange={e => setLl97Props({ ...ll97Props, squareFootage: e.target.value })} />
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-xs font-bold text-slate-400 uppercase">Year Built</label>
-                        <Input type="number" placeholder="e.g. 1960" className="bg-slate-950 border-slate-700/50 text-white" value={ll97Props.yearBuilt} onChange={e => setLl97Props({ ...ll97Props, yearBuilt: e.target.value })} />
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-xs font-bold text-slate-400 uppercase">Primary Fuel</label>
-                        <select className="w-full bg-slate-950 border border-slate-700/50 text-white text-sm rounded-md p-2 outline-none focus:ring-1 focus:ring-emerald-500" value={ll97Props.heatingFuel} onChange={e => setLl97Props({ ...ll97Props, heatingFuel: e.target.value })}>
-                          <option>Natural Gas</option>
-                          <option>#2 Fuel Oil</option>
-                          <option>#4 Fuel Oil</option>
-                          <option>District Steam</option>
-                          <option>Electricity (Heat Pumps)</option>
-                        </select>
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-xs font-bold text-slate-400 uppercase">Building Type</label>
-                        <select className="w-full bg-slate-950 border border-slate-700/50 text-white text-sm rounded-md p-2 outline-none focus:ring-1 focus:ring-emerald-500" value={ll97Props.buildingType} onChange={e => setLl97Props({ ...ll97Props, buildingType: e.target.value })}>
-                          <option>Multifamily Residential</option>
-                          <option>Commercial Office</option>
-                          <option>Retail</option>
-                          <option>Industrial</option>
-                          <option>Mixed Use</option>
-                        </select>
-                      </div>
-                      <Button className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold h-10 mt-2" onClick={() => runLL97Simulation()} disabled={ll97Loading}>
-                        {ll97Loading ? <><Zap className="w-4 h-4 mr-2 animate-pulse" /> Analyzing Emissions Data...</> : <><Activity className="w-4 h-4 mr-2" /> Run AI Simulation</>}
-                      </Button>
                     </CardContent>
                   </Card>
+                  <Card className="bg-card/50"><CardContent className="p-6">Requests<h3 className="text-2xl font-bold text-orange-400">{requests.filter(r => r.status === 'Pending').length}</h3></CardContent></Card>
                 </div>
+                {properties.filter(p => !['Pending Verification', 'Rejected'].includes(p.status || '')).length > 0 ? (
+                  <div className="h-[400px] rounded-xl overflow-hidden border border-border">
+                    <MapViewer
+                      properties={properties.filter(p => !['Pending Verification', 'Rejected'].includes(p.status || ''))}
+                      onSelectProperty={setManageProp}
+                    />
+                  </div>
+                ) : (
+                  <div className="p-12 text-center bg-slate-900/40 backdrop-blur-md border border-slate-700/50 rounded-xl">
+                    <Building2 className="w-14 h-14 mx-auto text-slate-600 mb-4" />
+                    <h3 className="text-xl font-bold text-white mb-2">Welcome to AssetGuard</h3>
+                    <p className="text-slate-400 mb-6">Register your first property to start monitoring compliance, violations, and tenant requests.</p>
+                    <Button className="bg-primary text-white gap-2" onClick={() => setShowAddProperty(true)}><Plus className="w-4 h-4" /> Add Your First Property</Button>
+                  </div>
+                )}
+              </div>
+            )}
 
-                {/* Right Column: Visualization Output */}
-                <div className="md:col-span-2 space-y-6">
-                  {!ll97Result && !ll97Loading ? (
-                    <div className="h-full min-h-[400px] border border-dashed border-slate-700/50 rounded-xl flex flex-col items-center justify-center p-8 text-center bg-slate-900/20">
-                      <Leaf className="w-16 h-16 text-slate-700 mb-4" />
-                      <h3 className="text-xl font-bold text-slate-500 mb-2">Ready to Simulate</h3>
-                      <p className="text-slate-600 max-w-sm">Enter the building parameters on the left to project carbon emissions and calculate 10-year penalty risks for Local Law 97.</p>
-                    </div>
-                  ) : ll97Loading ? (
-                    <div className="h-full min-h-[400px] border border-slate-700/50 rounded-xl flex flex-col items-center justify-center p-8 text-center bg-slate-900/40 backdrop-blur-md">
-                      <div className="w-16 h-16 border-4 border-emerald-500/30 border-t-emerald-500 rounded-full animate-spin mb-6"></div>
-                      <h3 className="text-lg font-bold text-emerald-400 mb-2 animate-pulse">Running Gemini AI Compliance Models...</h3>
-                      <p className="text-slate-500 text-sm">Calculating phase limits and extrapolating retrofit ROI.</p>
-                    </div>
-                  ) : (
-                    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
-                      {/* Status Header */}
-                      <div className={`p-5 rounded-xl border flex items-center justify-between shadow-lg ${ll97Result.compliance_status === 'Compliant' ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-red-500/10 border-red-500/30'}`}>
+            {/* REQUESTS */}
+            {activeTab === 'requests' && (
+              <div className="space-y-4">
+                <h2 className="text-2xl font-bold">Tenant Requests</h2>
+                {requests.map(r => (
+                  <Card key={r.id} className="bg-card/50 hover:bg-card/80 cursor-pointer transition-all group" onClick={() => setSelectedRequest(r)}>
+                    <CardContent className="p-6 flex justify-between items-center">
+                      <div className="flex gap-4 items-center">
+                        <div className="w-10 h-10 rounded-full bg-sky-400/20 flex justify-center items-center text-sky-400 group-hover:scale-110 transition-transform"><Wrench className="w-5 h-5" /></div>
                         <div>
-                          <div className="flex items-center gap-2 mb-1">
-                            {ll97Result.compliance_status === 'Compliant' ? <ShieldCheck className="w-5 h-5 text-emerald-500" /> : <AlertTriangle className="w-5 h-5 text-red-500" />}
-                            <span className={`font-bold text-lg ${ll97Result.compliance_status === 'Compliant' ? 'text-emerald-400' : 'text-red-400'}`}>{ll97Result.compliance_status}</span>
-                          </div>
-                          <p className="text-slate-300 text-sm mt-1">{ll97Result.summary}</p>
-                        </div>
-                        <div className="text-right">
-                          <div className="text-xs text-slate-500 uppercase font-bold tracking-wider mb-1">10-Year Fine Risk</div>
-                          <div className="text-3xl font-bold text-white">{ll97Result.total_10yr_penalty_risk}</div>
+                          <h4 className="font-bold flex items-center gap-2">
+                            {r.issue}
+                            {r.assigned_pro_id && <Badge variant="outline" className="text-[10px] h-5 bg-purple-500/10 text-purple-400 border-purple-500/20">Assigned</Badge>}
+                          </h4>
+                          <p className="text-sm text-muted-foreground">{r.tenantName || r.tenant_name} • {r.unit}</p>
                         </div>
                       </div>
-
-                      <div className="grid md:grid-cols-2 gap-6">
-                        {/* Penalty Timeline Chart (Custom CSS Bars) */}
-                        <Card className="bg-slate-900/40 backdrop-blur-md border-slate-700/50">
-                          <CardHeader className="pb-2">
-                            <CardTitle className="text-sm text-slate-400 uppercase font-bold tracking-wider flex items-center gap-2"><BarChart3 className="w-4 h-4 text-sky-400" /> Annual Penality Projection</CardTitle>
-                          </CardHeader>
-                          <CardContent>
-                            <div className="flex items-end gap-6 h-48 mt-4 pt-4 border-b border-slate-700/50 pb-2 relative">
-                              {/* Dynamic Bars */}
-                              <div className="flex-1 flex flex-col justify-end items-center group relative cursor-pointer">
-                                <div className="text-xs text-white mb-2 font-mono font-bold">${ll97Result.phase1_penalty_annual?.toLocaleString() || 0}</div>
-                                <div className="w-16 bg-gradient-to-t from-sky-600 to-sky-400 rounded-t-md transition-all group-hover:opacity-80 shadow-[0_0_15px_rgba(56,189,248,0.2)]" style={{ height: ll97Result.phase1_penalty_annual > 0 ? '40%' : '10px' }}></div>
-                                <div className="absolute -bottom-6 text-xs text-slate-400 font-bold">2024 - 2029</div>
-                              </div>
-                              <div className="flex-1 flex flex-col justify-end items-center group relative cursor-pointer">
-                                <div className="text-xs text-red-400 mb-2 font-mono font-bold">${ll97Result.phase2_penalty_annual?.toLocaleString() || 0}</div>
-                                <div className="w-16 bg-gradient-to-t from-red-600 to-orange-400 rounded-t-md transition-all group-hover:opacity-80 shadow-[0_0_15px_rgba(239,68,68,0.3)] animate-pulse" style={{ height: ll97Result.phase2_penalty_annual > 0 ? '90%' : '10px' }}></div>
-                                <div className="absolute -bottom-6 text-xs text-slate-400 font-bold">2030 - 2034</div>
-                              </div>
-                            </div>
-                          </CardContent>
-                        </Card>
-
-                        {/* Emissions Gap Data */}
-                        <div className="space-y-4">
-                          <Card className="bg-slate-900/40 backdrop-blur-md border-slate-700/50">
-                            <CardContent className="p-4 flex justify-between items-center">
-                              <div>
-                                <div className="text-xs text-slate-500 uppercase font-bold tracking-wider mb-1">Est. Emissions</div>
-                                <div className="text-xl font-bold text-white">{ll97Result.estimated_emissions_tco2e} <span className="text-sm font-normal text-slate-400">tCO2e</span></div>
-                              </div>
-                              <Flame className="w-8 h-8 text-orange-500 opacity-50" />
-                            </CardContent>
-                          </Card>
-                          <Card className="bg-slate-900/40 backdrop-blur-md border-slate-700/50">
-                            <CardContent className="p-4 flex justify-between items-center">
-                              <div>
-                                <div className="text-xs text-slate-500 uppercase font-bold tracking-wider mb-1">Phase 2 Limit</div>
-                                <div className="text-xl font-bold text-emerald-400">{ll97Result.phase2_limit_tco2e} <span className="text-sm font-normal text-emerald-700">tCO2e</span></div>
-                              </div>
-                              <Scale className="w-8 h-8 text-emerald-500 opacity-50" />
-                            </CardContent>
-                          </Card>
-                        </div>
-                      </div>
-
-                      {/* Retrofit Recommendations */}
-                      {ll97Result.retrofits?.length > 0 && (
-                        <div className="bg-blue-900/10 border border-sky-400/20 rounded-xl p-5 mt-6">
-                          <h3 className="font-bold text-white text-lg flex items-center gap-2 mb-4"><Wrench className="w-5 h-5 text-sky-400" /> AI Recommended Solutions</h3>
-                          <div className="space-y-3">
-                            {ll97Result.retrofits.map((r: any, i: number) => (
-                              <div key={i} className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 bg-slate-950/50 border border-slate-800 rounded-lg">
-                                <div className="flex items-start gap-3">
-                                  <div className={`w-2 h-2 rounded-full mt-2 shrink-0 ${r.priority === 'Critical' || r.priority === 'High' ? 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)]' : r.priority === 'Medium' ? 'bg-amber-400' : 'bg-emerald-500'}`} />
-                                  <div>
-                                    <div className="font-bold text-sky-100 text-sm">{r.action}</div>
-                                    <div className="text-xs text-slate-400 mt-1">Est. Cost: <span className="text-slate-300 font-mono">{r.estimated_cost}</span> &nbsp;|&nbsp; Payback: <span className="text-slate-300 font-mono">{r.payback_years} yrs</span></div>
-                                  </div>
-                                </div>
-                                <div className="flex flex-col items-end shrink-0 w-full sm:w-auto">
-                                  <div className="text-emerald-400 font-bold text-sm">-{r.emission_reduction_pct}% CO2</div>
-                                  <Badge variant="outline" className={`mt-1 text-[10px] ${r.priority === 'Critical' || r.priority === 'High' ? 'text-red-400 border-red-500/30' : 'text-emerald-400 border-emerald-500/30'}`}>{r.priority}</Badge>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                          <Button className="w-full mt-4 bg-indigo-500 hover:bg-sky-400 text-white font-bold transition-all"><ClipboardList className="w-4 h-4 mr-2" /> Match with Contractors On Pro Network</Button>
-                        </div>
-                      )}
-                      {/* Timeline */}
-                      {ll97Result.compliance_timeline && (
-                        <div className="p-4 bg-slate-950 border border-slate-700/50 rounded-xl flex items-center gap-3">
-                          <Clock className="w-5 h-5 text-amber-500 shrink-0" />
-                          <p className="text-slate-300 text-sm leading-relaxed">{ll97Result.compliance_timeline}</p>
-                        </div>
-                      )}
-
-                    </motion.div>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* CONTRACTORS */}
-          {activeTab === 'contractors' && (
-            <div className="space-y-6">
-              <div className="flex justify-between items-start">
-                <div>
-                  <h2 className="text-2xl font-bold flex items-center gap-2"><HardHat className="w-6 h-6 text-sky-400" /> Pro Network Marketplace</h2>
-                  <p className="text-muted-foreground mt-1">Find top-rated, verified NYC contractors for your compliance and repair needs.</p>
-                </div>
-                <Button className="bg-indigo-500 hover:bg-blue-700 text-white gap-2" onClick={() => alert("Post a job flow placeholder")}>
-                  <ClipboardList className="w-4 h-4" /> Request Quotes
-                </Button>
-              </div>
-
-              {/* Verified Badge / Trust Banner */}
-              <div className="p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-xl flex items-center gap-4">
-                <ShieldCheck className="w-8 h-8 text-emerald-500 shrink-0" />
-                <div className="text-sm text-gray-300">
-                  <strong className="text-emerald-400">AssetGuard Verified Partners.</strong> Every contractor in the Pro Network holds active NYC Department of Buildings (DOB) licenses, verified insurance, and passes rigorous quality checks.
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {contractors.map(c => (
-                  <Card key={c.id} className="bg-slate-900/40 backdrop-blur-md border border-slate-700/50 overflow-hidden relative">
-                    {c.status === 'Connected' && <div className="absolute top-0 right-0 w-12 h-12 bg-sky-500/20 rounded-bl-full flex items-start justify-end p-2"><CheckCircle className="w-4 h-4 text-sky-400" /></div>}
-                    <CardContent className="p-6 space-y-4">
-                      <div className="flex items-center gap-4">
-                        <Avatar className="w-12 h-12 border-2 border-slate-700/50"><AvatarImage src={`https://api.dicebear.com/7.x/initials/svg?seed=${c.name}`} /><AvatarFallback>PRO</AvatarFallback></Avatar>
-                        <div>
-                          <div className="font-bold text-lg text-white">{c.name}</div>
-                          <div className="text-sm text-indigo-400 font-medium">{c.type}</div>
-                        </div>
-                      </div>
-
-                      <div className="flex justify-between items-center text-xs text-slate-400">
-                        <span className="flex items-center gap-1"><Sparkles className="w-3 h-3 text-amber-400" /> 4.9 (120 reviews)</span>
-                        <span>{Math.floor(Math.random() * 50) + 10} jobs completed</span>
-                      </div>
-
-                      {c.status === 'Connected' ? (
-                        <div className="flex gap-2">
-                          <Button className="flex-1 bg-sky-500/20 text-sky-400 hover:bg-sky-500/30" onClick={() => alert(`Messaging ${c.name}...`)}><MessageSquare className="w-4 h-4 mr-2" /> Message</Button>
-                          <Button className="flex-1 bg-slate-800/40 text-white hover:bg-slate-700/50 border border-slate-700/50" onClick={() => alert(`Requesting quote from ${c.name}...`)}>Get Quote</Button>
-                        </div>
-                      ) : (
-                        <Button className="w-full bg-indigo-500/20 text-indigo-400 hover:bg-indigo-500/30 border border-indigo-500/20" onClick={() => {
-                          alert(`Connection request sent to ${c.name}. They will review your property portfolio and respond.`);
-                          toggleContractor(c.id);
-                        }}>
-                          {c.status === 'Pending' ? 'Request Pending...' : 'Connect to Network'}
+                      <div className="flex gap-2">
+                        <Badge className={`${r.status === 'Pending' ? 'bg-amber-500' : r.status === 'Resolved' ? 'bg-emerald-500' : 'bg-sky-400'} hover:bg-opacity-80 transition-colors`}>{r.status}</Badge>
+                        <Button size="sm" variant="outline" className="invisible group-hover:visible" onClick={(e) => { e.stopPropagation(); setSelectedRequest(r); }}>
+                          Manage
                         </Button>
-                      )}
+                      </div>
+                    </CardContent></Card>
+                ))}
+              </div>
+            )}
+
+            {/* PROPERTIES */}
+            {activeTab === 'properties' && (
+              <div className="grid grid-cols-3 gap-6">
+                {properties.map(p => (
+                  <Card key={p.id} className="bg-card/50 overflow-hidden group">
+                    <div className="h-48 relative"><img src={p.image || 'https://images.unsplash.com/photo-1496442226666-8d4d0e62e6e9?auto=format&fit=crop&q=80&w=400&h=300'} onError={(e) => { e.currentTarget.src = 'https://images.unsplash.com/photo-1496442226666-8d4d0e62e6e9?auto=format&fit=crop&q=80&w=400&h=300'; e.currentTarget.onerror = null; }} className="w-full h-full object-cover" /><Badge className="absolute top-2 right-2">{p.status}</Badge></div>
+                    <CardContent className="p-4">
+                      <h3 className="font-bold">{p.address}</h3>
+                      <p className="text-sm text-muted-foreground mb-2">{p.units} Units</p>
+                      <div className="flex items-center gap-2 mb-4 text-xs text-slate-500 bg-slate-900/40 backdrop-blur-md/50 p-2 rounded border border-slate-700/50">
+                        <Lock className="w-3 h-3" />
+                        Access Code: <span className="text-zinc-300 font-mono font-bold tracking-widest">{p.access_code || 'N/A'}</span>
+                      </div>
+                      <Button className="w-full" variant="outline" onClick={() => setManageProp(p)}>Manage Details</Button>
                     </CardContent>
                   </Card>
                 ))}
               </div>
-            </div>
-          )}
+            )}
 
-          {/* SETTINGS VIEW */}
-          {activeTab === 'settings' && (
-            <div className="max-w-xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-              <div><h2 className="text-3xl font-bold tracking-tight text-white">Organization Profile</h2><p className="text-muted-foreground">Manage your company details and contact info.</p></div>
+            {/* MANAGER TENANTS TAB */}
+            {activeTab === 'manager_tenants' && (
+              <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500 fade-in">
+                <div className="flex justify-between items-center bg-slate-900/50 p-6 rounded-2xl border border-slate-800/50 backdrop-blur-sm">
+                  <div>
+                    <h2 className="text-2xl font-bold tracking-tight text-white mb-1">Your Tenants</h2>
+                    <p className="text-slate-400">View and manage tenants registered to your properties.</p>
+                  </div>
+                </div>
 
-              <Card className="bg-slate-900/40 backdrop-blur-md border-slate-700/50">
-                <CardHeader><CardTitle className="text-white">Company Details</CardTitle></CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-2"><label className="text-sm font-medium text-gray-300">Company Name</label><Input value={editProfile?.company_name || ""} onChange={e => setEditProfile({ ...editProfile, company_name: e.target.value })} className="bg-slate-800/40 border-slate-700/50 text-white" placeholder="e.g. NYC Holdings LLC" /></div>
-                  <div className="space-y-2"><label className="text-sm font-medium text-gray-300">Primary Contact Person</label><Input value={editProfile?.full_name || ""} onChange={e => setEditProfile({ ...editProfile, full_name: e.target.value })} className="bg-slate-800/40 border-slate-700/50 text-white" placeholder="e.g. John Doe" /></div>
-                </CardContent>
-              </Card>
+                <Card className="bg-slate-900/50 border border-slate-800/50 backdrop-blur-sm overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="border-b border-slate-800 bg-slate-900/80">
+                          <th className="p-4 text-xs font-semibold text-slate-400 uppercase tracking-wider">Tenant Name</th>
+                          <th className="p-4 text-xs font-semibold text-slate-400 uppercase tracking-wider">Email</th>
+                          <th className="p-4 text-xs font-semibold text-slate-400 uppercase tracking-wider">Property</th>
+                          <th className="p-4 text-xs font-semibold text-slate-400 uppercase tracking-wider">Unit</th>
+                          <th className="p-4 text-xs font-semibold text-slate-400 uppercase tracking-wider">Status</th>
+                          <th className="p-4 text-xs font-semibold text-slate-400 uppercase tracking-wider">Joined</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {allProfiles.filter(p => p.role === 'tenant' && activeProperties.some(prop => prop.id === p.property_id)).map((tenant) => {
+                          const prop = activeProperties.find(p => p.id === tenant.property_id);
+                          return (
+                            <tr key={tenant.id} className="border-b border-slate-800/50 hover:bg-slate-800/30 transition-colors group">
+                              <td className="p-4">
+                                <span className="text-sm font-semibold text-slate-200">{tenant.full_name || 'Anonymous Tenant'}</span>
+                              </td>
+                              <td className="p-4">
+                                <span className="text-sm text-slate-400">{tenant.email}</span>
+                              </td>
+                              <td className="p-4">
+                                <span className="text-sm text-slate-300">{prop?.address || 'Unknown Property'}</span>
+                              </td>
+                              <td className="p-4">
+                                <Badge variant="outline" className="bg-slate-800 text-slate-300 border-slate-700 whitespace-nowrap">
+                                  {tenant.unit || 'N/A'}
+                                </Badge>
+                              </td>
+                              <td className="p-4">
+                                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                                  {tenant.status}
+                                </span>
+                              </td>
+                              <td className="p-4">
+                                <span className="text-xs text-slate-500">{new Date(tenant.created_at).toLocaleDateString()}</span>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                        {allProfiles.filter(p => p.role === 'tenant' && activeProperties.some(prop => prop.id === p.property_id)).length === 0 && (
+                          <tr>
+                            <td colSpan={6} className="text-center p-8 text-slate-500">
+                              No tenants registered yet. Distribute your property access codes for tenants to sign up.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </Card>
+              </div>
+            )}
 
-              <Card className="bg-slate-900/40 backdrop-blur-md border-slate-700/50">
-                <CardHeader><CardTitle className="text-white">Public Contact Info</CardTitle></CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-2"><label className="text-sm font-medium text-gray-300">Support Phone</label><Input value={editProfile?.phone || ""} onChange={e => setEditProfile({ ...editProfile, phone: e.target.value })} className="bg-slate-800/40 border-slate-700/50 text-white" placeholder="e.g. 212-555-0199" /></div>
-                  <div className="space-y-2"><label className="text-sm font-medium text-gray-300">Support Email</label><Input value={editProfile?.contact_email || ""} onChange={e => setEditProfile({ ...editProfile, contact_email: e.target.value })} className="bg-slate-800/40 border-slate-700/50 text-white" placeholder="e.g. support@nycholdings.com" /></div>
-                </CardContent>
-              </Card>
+            {/* MANAGER TENANTS TAB */}
+            {activeTab === 'manager_tenants' && (
+              <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500 fade-in">
+                <div className="flex justify-between items-center bg-slate-900/50 p-6 rounded-2xl border border-slate-800/50 backdrop-blur-sm">
+                  <div>
+                    <h2 className="text-2xl font-bold tracking-tight text-white mb-1">Your Tenants</h2>
+                    <p className="text-slate-400">View and manage tenants registered to your properties.</p>
+                  </div>
+                </div>
 
-              {/* B2B API ACCESS SETTINGS */}
-              <Card className="bg-slate-900/40 backdrop-blur-md border-slate-700/50 mt-6">
-                <CardHeader>
-                  <CardTitle className="text-white flex items-center gap-2"><Lock className="w-5 h-5 text-indigo-400" /> B2B API Access</CardTitle>
-                  <CardDescription>Generate API keys to integrate NYC compliance data directly into your own software.</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {(!userProfile?.membership_tier || userProfile.membership_tier !== 'Business') ? (
-                    <div className="p-4 bg-indigo-500/10 border border-indigo-500/20 rounded-lg text-center">
-                      <Lock className="w-8 h-8 text-indigo-400 mx-auto mb-3" />
-                      <h4 className="text-white font-bold mb-1">API Access is a Business Tier Feature</h4>
-                      <p className="text-sm text-slate-400 mb-4">Upgrade to the Business Tier ($99/mo) to unlock developer API access and programmatic compliance monitoring.</p>
-                      <Button className="bg-indigo-500 hover:bg-sky-400 text-white" onClick={() => alert("Redirect to Stripe checkout for Business Tier...")}><Sparkles className="w-4 h-4 mr-2 text-amber-400" /> Upgrade to Business</Button>
-                    </div>
-                  ) : (
-                    <div className="space-y-4">
-                      <div className="flex justify-between items-center p-3 bg-slate-950 border border-slate-800/50 rounded-lg">
-                        <div>
-                          <div className="text-sm font-bold text-white">Production API Key</div>
-                          <div className="text-xs text-slate-500 font-mono">sk_live_...</div>
+                <Card className="bg-slate-900/50 border border-slate-800/50 backdrop-blur-sm overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="border-b border-slate-800 bg-slate-900/80">
+                          <th className="p-4 text-xs font-semibold text-slate-400 uppercase tracking-wider">Tenant Name</th>
+                          <th className="p-4 text-xs font-semibold text-slate-400 uppercase tracking-wider">Email</th>
+                          <th className="p-4 text-xs font-semibold text-slate-400 uppercase tracking-wider">Property</th>
+                          <th className="p-4 text-xs font-semibold text-slate-400 uppercase tracking-wider">Unit</th>
+                          <th className="p-4 text-xs font-semibold text-slate-400 uppercase tracking-wider">Status</th>
+                          <th className="p-4 text-xs font-semibold text-slate-400 uppercase tracking-wider">Joined</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {allProfiles.filter(p => p.role === 'tenant' && activeProperties.some(prop => prop.id === p.property_id)).map((tenant) => {
+                          const prop = activeProperties.find(p => p.id === tenant.property_id);
+                          return (
+                            <tr key={tenant.id} className="border-b border-slate-800/50 hover:bg-slate-800/30 transition-colors group">
+                              <td className="p-4">
+                                <span className="text-sm font-semibold text-slate-200">{tenant.full_name || 'Anonymous Tenant'}</span>
+                              </td>
+                              <td className="p-4">
+                                <span className="text-sm text-slate-400">{tenant.email}</span>
+                              </td>
+                              <td className="p-4">
+                                <span className="text-sm text-slate-300">{prop?.address || 'Unknown Property'}</span>
+                              </td>
+                              <td className="p-4">
+                                <Badge variant="outline" className="bg-slate-800 text-slate-300 border-slate-700 whitespace-nowrap">
+                                  {tenant.unit || 'N/A'}
+                                </Badge>
+                              </td>
+                              <td className="p-4">
+                                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                                  {tenant.status}
+                                </span>
+                              </td>
+                              <td className="p-4">
+                                <span className="text-xs text-slate-500">{new Date(tenant.created_at).toLocaleDateString()}</span>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                        {allProfiles.filter(p => p.role === 'tenant' && activeProperties.some(prop => prop.id === p.property_id)).length === 0 && (
+                          <tr>
+                            <td colSpan={6} className="text-center p-8 text-slate-500">
+                              No tenants registered yet. Distribute your property access codes for tenants to sign up.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </Card>
+              </div>
+            )}
+
+
+            {/* COMPLIANCE CALENDAR */}
+            {activeTab === 'calendar' && (
+              <div className="space-y-6">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <h2 className="text-2xl font-bold flex items-center gap-2"><Calendar className="w-6 h-6 text-sky-400" /> Compliance Calendar</h2>
+                    <p className="text-muted-foreground mt-1">Track key deadlines for all major NYC local laws across your portfolio.</p>
+                  </div>
+                  {/* Upgrade Placeholder CTA */}
+                  {(!userProfile?.membership_tier || userProfile.membership_tier === 'Free') && (
+                    <Button className="bg-indigo-500 hover:bg-indigo-500 text-white gap-2" onClick={() => {
+                      // Dummy handler for upgrade
+                      alert("This will redirect to Stripe Checkout to upgrade your tier to Pro ($29/mo).")
+                    }}>
+                      <ArrowUpCircle className="w-4 h-4" /> Unlock Pro Features
+                    </Button>
+                  )}
+                </div>
+
+                {properties.length === 0 ? (
+                  <div className="p-8 text-center bg-slate-900/40 backdrop-blur-md/50 border border-slate-700/50 rounded-xl relative overflow-hidden group">
+                    <Flame className="w-12 h-12 mx-auto text-zinc-700 mb-4 group-hover:text-slate-500 transition-colors" />
+                    <h3 className="text-xl font-bold text-white mb-2">No Properties Found</h3>
+                    <p className="text-slate-400 mb-6">Add a property to start tracking its NYC compliance deadlines (LL97, LL84, LL11, etc.).</p>
+                    <Button className="bg-indigo-500 text-white hover:bg-sky-400" onClick={() => setShowAddProperty(true)}>
+                      <Building2 className="w-4 h-4 mr-2" /> Add Your First Property
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {properties.map(p => (
+                      <Card key={p.id} className="bg-card/50 border-slate-700/50 flex flex-col">
+                        <CardHeader className="border-b border-slate-800/50 pb-4 bg-slate-900/40 backdrop-blur-md/30">
+                          <CardTitle className="text-lg flex items-center justify-between">
+                            <span className="truncate pr-4">{p.address}</span>
+                            <Badge variant="outline" className="shrink-0">{p.units} Units</Badge>
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent className="p-0 flex-1">
+                          <div className="divide-y divide-slate-800/50/50">
+                            {/* LL97 */}
+                            <div className="p-4 flex items-center justify-between hover:bg-slate-800/40/30 transition-colors">
+                              <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 rounded-full bg-amber-500/20 flex items-center justify-center"><Flame className="w-4 h-4 text-amber-500" /></div>
+                                <div>
+                                  <div className="text-sm font-bold">LL97 (Carbon)</div>
+                                  <div className="text-xs text-slate-500">Report Due</div>
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <div className="text-sm font-bold text-white">May 1, 2025</div>
+                                <Badge variant="default" className="text-[10px] bg-red-500 mt-1">Action Req</Badge>
+                              </div>
+                            </div>
+                            {/* LL84 */}
+                            <div className="p-4 flex items-center justify-between hover:bg-slate-800/40/30 transition-colors">
+                              <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 rounded-full bg-sky-400/20 flex items-center justify-center"><Zap className="w-4 h-4 text-sky-400" /></div>
+                                <div>
+                                  <div className="text-sm font-bold">LL84 (Energy)</div>
+                                  <div className="text-xs text-slate-500">Benchmarking</div>
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <div className="text-sm font-bold text-white">May 1, 2025</div>
+                                <Badge variant="outline" className="text-[10px] text-orange-400 border-amber-500/50 mt-1">Approaching</Badge>
+                              </div>
+                            </div>
+                            {/* LL11 */}
+                            <div className="p-4 flex items-center justify-between hover:bg-slate-800/40/30 transition-colors">
+                              <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 rounded-full bg-purple-500/20 flex items-center justify-center"><Building2 className="w-4 h-4 text-purple-500" /></div>
+                                <div>
+                                  <div className="text-sm font-bold">LL11 (FISP)</div>
+                                  <div className="text-xs text-slate-500">Facade Inspect</div>
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <div className="text-sm font-bold text-slate-400">Cycle 10</div>
+                                <Badge variant="outline" className="text-[10px] text-slate-500 border-gray-700 mt-1">Pending Block</Badge>
+                              </div>
+                            </div>
+                            {/* LL152 */}
+                            <div className="p-4 flex items-center justify-between hover:bg-slate-800/40/30 transition-colors">
+                              <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 rounded-full bg-zinc-700 flex items-center justify-center"><Scale className="w-4 h-4 text-gray-300" /></div>
+                                <div>
+                                  <div className="text-sm font-bold">LL152 (Gas)</div>
+                                  <div className="text-xs text-slate-500">Piping System</div>
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <div className="text-sm font-bold text-slate-400">Dec 31, 2025</div>
+                                <Badge variant="outline" className="text-[10px] text-slate-500 border-gray-700 mt-1">On Track</Badge>
+                              </div>
+                            </div>
+                          </div>
+                        </CardContent>
+                        {(!userProfile?.membership_tier || userProfile.membership_tier === 'Free') && (
+                          <div className="p-4 bg-indigo-500/10 border-t border-indigo-500/20 text-center">
+                            <p className="text-xs text-indigo-300 mb-2">Automated alerts available in Pro.</p>
+                            <Button size="sm" variant="outline" className="w-full border-indigo-500/50 text-indigo-400 hover:bg-indigo-500/20" onClick={() => alert("Upgrade to Pro to unlock automated D-30 and D-7 reminders via Email/SMS.")}>Enable Alerts</Button>
+                          </div>
+                        )}
+                      </Card>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* LL97 CARBON LAW SIMULATOR */}
+            {activeTab === 'll97' && (
+              <div className="space-y-6">
+                <div>
+                  <h2 className="text-2xl font-bold flex items-center gap-2"><Flame className="w-6 h-6 text-amber-500" /> LL97 Carbon Emissions Simulator</h2>
+                  <p className="text-muted-foreground mt-1">Estimate your building's compliance with NYC Local Law 97 (Climate Mobilization Act) and calculate potential penalties.</p>
+                </div>
+
+                {/* Input Form */}
+                <Card className="bg-card/50 border-slate-700/50">
+                  <CardHeader>
+                    <CardTitle className="text-lg">Building Information</CardTitle>
+                    <CardDescription>Enter details about your property to simulate LL97 compliance. Select an existing property or enter manually.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {/* Quick select from existing properties */}
+                    {properties.length > 0 && (
+                      <div>
+                        <label className="text-xs text-slate-400 mb-1 block">Quick Select Property</label>
+                        <div className="flex flex-wrap gap-2">
+                          {properties.map(p => (
+                            <Button key={p.id} size="sm" variant="outline" className="text-xs border-slate-700/50 hover:border-sky-400 hover:text-sky-300" onClick={() => runLL97Simulation(p)}>
+                              <Building2 className="w-3 h-3 mr-1" /> {p.address}
+                            </Button>
+                          ))}
                         </div>
-                        <Button variant="outline" size="sm" className="border-slate-700/50 text-sky-400 hover:text-sky-300" onClick={() => alert("API Key generated.")}>Generate New Key</Button>
+                      </div>
+                    )}
+
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <div>
+                        <label className="text-xs text-slate-400 mb-1 block">Approx. Square Footage</label>
+                        <Input placeholder="e.g. 50000" value={ll97Props.squareFootage} onChange={e => setLl97Props({ ...ll97Props, squareFootage: e.target.value })} className="bg-slate-800/40 border-slate-600/50" />
+                      </div>
+                      <div>
+                        <label className="text-xs text-slate-400 mb-1 block">Primary Heating Fuel</label>
+                        <select className="w-full bg-slate-800/40 border border-slate-600/50 text-white rounded-md p-2 text-sm" value={ll97Props.heatingFuel} onChange={e => setLl97Props({ ...ll97Props, heatingFuel: e.target.value })}>
+                          <option value="Natural Gas">Natural Gas</option>
+                          <option value="#2 Fuel Oil">#2 Fuel Oil</option>
+                          <option value="#4 Fuel Oil">#4 Fuel Oil</option>
+                          <option value="Electric (Grid)">Electric (Grid)</option>
+                          <option value="Steam (District)">Steam (District)</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-xs text-slate-400 mb-1 block">Building Type</label>
+                        <select className="w-full bg-slate-800/40 border border-slate-600/50 text-white rounded-md p-2 text-sm" value={ll97Props.buildingType} onChange={e => setLl97Props({ ...ll97Props, buildingType: e.target.value })}>
+                          <option value="Multifamily Residential">Multifamily Residential</option>
+                          <option value="Office">Office</option>
+                          <option value="Retail">Retail</option>
+                          <option value="Mixed Use">Mixed Use</option>
+                          <option value="Hotel">Hotel</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-xs text-slate-400 mb-1 block">Year Built</label>
+                        <Input placeholder="e.g. 1960" value={ll97Props.yearBuilt} onChange={e => setLl97Props({ ...ll97Props, yearBuilt: e.target.value })} className="bg-slate-800/40 border-slate-600/50" />
                       </div>
                     </div>
-                  )}
-                </CardContent>
-              </Card>
 
-              <div className="flex justify-end pt-4">
-                <Button size="lg" className="bg-indigo-500 hover:bg-blue-700 text-white px-8" onClick={handleSaveProfile}>Save Changes</Button>
+                    <Button className="bg-orange-600 hover:bg-orange-700 text-white gap-2" onClick={() => runLL97Simulation(properties[0])} disabled={ll97Loading}>
+                      {ll97Loading ? <><Activity className="w-4 h-4 animate-spin" /> Simulating...</> : <><Flame className="w-4 h-4" /> Run LL97 Simulation</>}
+                    </Button>
+                  </CardContent>
+                </Card>
+
+                {/* Results */}
+                {ll97Result && (
+                  <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+                    {/* Status Banner */}
+                    <div className={`p-6 rounded-xl border ${ll97Result.risk_level === 'Critical' ? 'bg-red-500/10 border-red-500/30' : ll97Result.risk_level === 'High' ? 'bg-amber-500/10 border-amber-500/30' : ll97Result.risk_level === 'Medium' ? 'bg-amber-400/10 border-amber-400/30' : 'bg-emerald-500/10 border-emerald-500/30'}`}>
+                      <div className="flex items-center justify-between mb-3">
+                        <h3 className="text-xl font-bold flex items-center gap-2">
+                          {ll97Result.risk_level === 'Critical' || ll97Result.risk_level === 'High' ? <AlertTriangle className="w-6 h-6 text-red-500" /> : <CheckCircle className="w-6 h-6 text-emerald-500" />}
+                          {ll97Result.compliance_status}
+                        </h3>
+                        <Badge className={`text-sm px-3 py-1 ${ll97Result.risk_level === 'Critical' ? 'bg-red-500' : ll97Result.risk_level === 'High' ? 'bg-amber-500' : ll97Result.risk_level === 'Medium' ? 'bg-amber-400 text-black' : 'bg-emerald-500'}`}>
+                          {ll97Result.risk_level} Risk
+                        </Badge>
+                      </div>
+                      <p className="text-zinc-300">{ll97Result.summary}</p>
+                    </div>
+
+                    {/* Emission Stats */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <Card className="bg-slate-900/40 backdrop-blur-md border-slate-700/50"><CardContent className="p-4 text-center">
+                        <div className="text-3xl font-bold text-white mb-1">{ll97Result.estimated_emissions_tco2e}</div>
+                        <div className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">tCO₂e / Year</div>
+                      </CardContent></Card>
+                      <Card className="bg-slate-900/40 backdrop-blur-md border-slate-700/50"><CardContent className="p-4 text-center">
+                        <div className="text-3xl font-bold text-sky-300 mb-1">{ll97Result.phase1_limit_tco2e}</div>
+                        <div className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Phase 1 Limit (2024-29)</div>
+                      </CardContent></Card>
+                      <Card className="bg-slate-900/40 backdrop-blur-md border-slate-700/50"><CardContent className="p-4 text-center">
+                        <div className="text-3xl font-bold text-purple-400 mb-1">{ll97Result.phase2_limit_tco2e}</div>
+                        <div className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Phase 2 Limit (2030-34)</div>
+                      </CardContent></Card>
+                      <Card className="bg-slate-900/40 backdrop-blur-md border-slate-700/50"><CardContent className="p-4 text-center">
+                        <div className="text-3xl font-bold text-red-400 mb-1">{ll97Result.total_10yr_penalty_risk}</div>
+                        <div className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">10-Year Penalty Risk</div>
+                      </CardContent></Card>
+                    </div>
+
+                    {/* Annual Penalties */}
+                    <div className="grid grid-cols-2 gap-4">
+                      <Card className="bg-slate-900/40 backdrop-blur-md border-slate-700/50"><CardContent className="p-5">
+                        <div className="text-xs text-slate-500 uppercase font-bold tracking-wider mb-2">Phase 1 Annual Penalty (2024-2029)</div>
+                        <div className="text-2xl font-bold text-white">${ll97Result.phase1_penalty_annual?.toLocaleString() || '0'}</div>
+                        <div className="text-xs text-slate-400 mt-1">$268/ton over limit</div>
+                      </CardContent></Card>
+                      <Card className="bg-slate-900/40 backdrop-blur-md border-slate-700/50"><CardContent className="p-5">
+                        <div className="text-xs text-slate-500 uppercase font-bold tracking-wider mb-2">Phase 2 Annual Penalty (2030-2034)</div>
+                        <div className="text-2xl font-bold text-orange-400">${ll97Result.phase2_penalty_annual?.toLocaleString() || '0'}</div>
+                        <div className="text-xs text-slate-400 mt-1">Stricter limits apply</div>
+                      </CardContent></Card>
+                    </div>
+
+                    {/* Retrofit Recommendations */}
+                    {ll97Result.retrofits?.length > 0 && (
+                      <Card className="bg-slate-900/40 backdrop-blur-md border-slate-700/50">
+                        <CardHeader>
+                          <CardTitle className="text-lg flex items-center gap-2"><Wrench className="w-5 h-5 text-sky-400" /> Recommended Retrofits</CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-3">
+                          {ll97Result.retrofits.map((r: any, i: number) => (
+                            <div key={i} className="flex items-start gap-4 p-4 bg-slate-950 border border-slate-700/50 rounded-lg">
+                              <div className={`w-2 h-2 rounded-full mt-2 ${r.priority === 'High' ? 'bg-red-500' : r.priority === 'Medium' ? 'bg-amber-400' : 'bg-emerald-500'}`} />
+                              <div className="flex-1">
+                                <div className="font-bold text-white text-sm">{r.action}</div>
+                                <div className="text-xs text-slate-400 mt-1">Cost: {r.estimated_cost} • Emission Reduction: {r.emission_reduction_pct}% • Payback: {r.payback_years} years</div>
+                              </div>
+                              <Badge variant="outline" className={`shrink-0 text-[10px] ${r.priority === 'High' ? 'text-red-400 border-red-500/30' : 'text-emerald-400 border-emerald-500/30'}`}>{r.priority}</Badge>
+                            </div>
+                          ))}
+                        </CardContent>
+                      </Card>
+                    )}
+
+                    {/* Timeline */}
+                    {ll97Result.compliance_timeline && (
+                      <div className="p-4 bg-blue-900/10 border border-sky-400/20 rounded-xl">
+                        <div className="flex items-center gap-2 text-sky-300 font-bold text-sm mb-1"><Clock className="w-4 h-4" /> Compliance Timeline</div>
+                        <p className="text-zinc-300 text-sm">{ll97Result.compliance_timeline}</p>
+                      </div>
+                    )}
+                  </motion.div>
+                )}
               </div>
-            </div>
-          )}
+            )}
 
-          {/* MAP */}
-          {activeTab === 'map' && <div className="h-full rounded-xl overflow-hidden border border-border"><MapViewer properties={properties} onSelectProperty={setManageProp} /></div>}
-        </div>
+            {/* LL97 SIMULATOR TAB */}
+            {activeTab === 'll97' && (
+              <div className="space-y-6 max-w-5xl">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <h2 className="text-2xl font-bold flex items-center gap-2 text-emerald-400"><Leaf className="w-6 h-6" /> Local Law 97 Simulator</h2>
+                    <p className="text-muted-foreground mt-1">Estimate carbon emissions, visualize penalty timelines, and discover ROI for green retrofits.</p>
+                  </div>
+                </div>
+
+                <div className="grid md:grid-cols-3 gap-6">
+                  {/* Left Column: Input Form */}
+                  <div className="md:col-span-1 space-y-4">
+                    <Card className="bg-slate-900/40 backdrop-blur-md border border-slate-700/50">
+                      <CardHeader className="pb-4">
+                        <CardTitle className="text-lg text-white">Building Profile</CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        <div className="space-y-2">
+                          <label className="text-xs font-bold text-slate-400 uppercase">Property Address *</label>
+                          <Input placeholder="e.g. 123 Broadway, NY" className="bg-slate-950 border-slate-700/50 text-white" value={ll97Props.address} onChange={e => setLl97Props({ ...ll97Props, address: e.target.value })} />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-xs font-bold text-slate-400 uppercase">Square Footage *</label>
+                          <Input type="number" placeholder="e.g. 50000" className="bg-slate-950 border-slate-700/50 text-white" value={ll97Props.squareFootage} onChange={e => setLl97Props({ ...ll97Props, squareFootage: e.target.value })} />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-xs font-bold text-slate-400 uppercase">Year Built</label>
+                          <Input type="number" placeholder="e.g. 1960" className="bg-slate-950 border-slate-700/50 text-white" value={ll97Props.yearBuilt} onChange={e => setLl97Props({ ...ll97Props, yearBuilt: e.target.value })} />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-xs font-bold text-slate-400 uppercase">Primary Fuel</label>
+                          <select className="w-full bg-slate-950 border border-slate-700/50 text-white text-sm rounded-md p-2 outline-none focus:ring-1 focus:ring-emerald-500" value={ll97Props.heatingFuel} onChange={e => setLl97Props({ ...ll97Props, heatingFuel: e.target.value })}>
+                            <option>Natural Gas</option>
+                            <option>#2 Fuel Oil</option>
+                            <option>#4 Fuel Oil</option>
+                            <option>District Steam</option>
+                            <option>Electricity (Heat Pumps)</option>
+                          </select>
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-xs font-bold text-slate-400 uppercase">Building Type</label>
+                          <select className="w-full bg-slate-950 border border-slate-700/50 text-white text-sm rounded-md p-2 outline-none focus:ring-1 focus:ring-emerald-500" value={ll97Props.buildingType} onChange={e => setLl97Props({ ...ll97Props, buildingType: e.target.value })}>
+                            <option>Multifamily Residential</option>
+                            <option>Commercial Office</option>
+                            <option>Retail</option>
+                            <option>Industrial</option>
+                            <option>Mixed Use</option>
+                          </select>
+                        </div>
+                        <Button className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold h-10 mt-2" onClick={() => runLL97Simulation()} disabled={ll97Loading}>
+                          {ll97Loading ? <><Zap className="w-4 h-4 mr-2 animate-pulse" /> Analyzing Emissions Data...</> : <><Activity className="w-4 h-4 mr-2" /> Run AI Simulation</>}
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  </div>
+
+                  {/* Right Column: Visualization Output */}
+                  <div className="md:col-span-2 space-y-6">
+                    {!ll97Result && !ll97Loading ? (
+                      <div className="h-full min-h-[400px] border border-dashed border-slate-700/50 rounded-xl flex flex-col items-center justify-center p-8 text-center bg-slate-900/20">
+                        <Leaf className="w-16 h-16 text-slate-700 mb-4" />
+                        <h3 className="text-xl font-bold text-slate-500 mb-2">Ready to Simulate</h3>
+                        <p className="text-slate-600 max-w-sm">Enter the building parameters on the left to project carbon emissions and calculate 10-year penalty risks for Local Law 97.</p>
+                      </div>
+                    ) : ll97Loading ? (
+                      <div className="h-full min-h-[400px] border border-slate-700/50 rounded-xl flex flex-col items-center justify-center p-8 text-center bg-slate-900/40 backdrop-blur-md">
+                        <div className="w-16 h-16 border-4 border-emerald-500/30 border-t-emerald-500 rounded-full animate-spin mb-6"></div>
+                        <h3 className="text-lg font-bold text-emerald-400 mb-2 animate-pulse">Running Gemini AI Compliance Models...</h3>
+                        <p className="text-slate-500 text-sm">Calculating phase limits and extrapolating retrofit ROI.</p>
+                      </div>
+                    ) : (
+                      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+                        {/* Status Header */}
+                        <div className={`p-5 rounded-xl border flex items-center justify-between shadow-lg ${ll97Result.compliance_status === 'Compliant' ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-red-500/10 border-red-500/30'}`}>
+                          <div>
+                            <div className="flex items-center gap-2 mb-1">
+                              {ll97Result.compliance_status === 'Compliant' ? <ShieldCheck className="w-5 h-5 text-emerald-500" /> : <AlertTriangle className="w-5 h-5 text-red-500" />}
+                              <span className={`font-bold text-lg ${ll97Result.compliance_status === 'Compliant' ? 'text-emerald-400' : 'text-red-400'}`}>{ll97Result.compliance_status}</span>
+                            </div>
+                            <p className="text-slate-300 text-sm mt-1">{ll97Result.summary}</p>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-xs text-slate-500 uppercase font-bold tracking-wider mb-1">10-Year Fine Risk</div>
+                            <div className="text-3xl font-bold text-white">{ll97Result.total_10yr_penalty_risk}</div>
+                          </div>
+                        </div>
+
+                        <div className="grid md:grid-cols-2 gap-6">
+                          {/* Penalty Timeline Chart (Custom CSS Bars) */}
+                          <Card className="bg-slate-900/40 backdrop-blur-md border-slate-700/50">
+                            <CardHeader className="pb-2">
+                              <CardTitle className="text-sm text-slate-400 uppercase font-bold tracking-wider flex items-center gap-2"><BarChart3 className="w-4 h-4 text-sky-400" /> Annual Penality Projection</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                              <div className="flex items-end gap-6 h-48 mt-4 pt-4 border-b border-slate-700/50 pb-2 relative">
+                                {/* Dynamic Bars */}
+                                <div className="flex-1 flex flex-col justify-end items-center group relative cursor-pointer">
+                                  <div className="text-xs text-white mb-2 font-mono font-bold">${ll97Result.phase1_penalty_annual?.toLocaleString() || 0}</div>
+                                  <div className="w-16 bg-gradient-to-t from-sky-600 to-sky-400 rounded-t-md transition-all group-hover:opacity-80 shadow-[0_0_15px_rgba(56,189,248,0.2)]" style={{ height: ll97Result.phase1_penalty_annual > 0 ? '40%' : '10px' }}></div>
+                                  <div className="absolute -bottom-6 text-xs text-slate-400 font-bold">2024 - 2029</div>
+                                </div>
+                                <div className="flex-1 flex flex-col justify-end items-center group relative cursor-pointer">
+                                  <div className="text-xs text-red-400 mb-2 font-mono font-bold">${ll97Result.phase2_penalty_annual?.toLocaleString() || 0}</div>
+                                  <div className="w-16 bg-gradient-to-t from-red-600 to-orange-400 rounded-t-md transition-all group-hover:opacity-80 shadow-[0_0_15px_rgba(239,68,68,0.3)] animate-pulse" style={{ height: ll97Result.phase2_penalty_annual > 0 ? '90%' : '10px' }}></div>
+                                  <div className="absolute -bottom-6 text-xs text-slate-400 font-bold">2030 - 2034</div>
+                                </div>
+                              </div>
+                            </CardContent>
+                          </Card>
+
+                          {/* Emissions Gap Data */}
+                          <div className="space-y-4">
+                            <Card className="bg-slate-900/40 backdrop-blur-md border-slate-700/50">
+                              <CardContent className="p-4 flex justify-between items-center">
+                                <div>
+                                  <div className="text-xs text-slate-500 uppercase font-bold tracking-wider mb-1">Est. Emissions</div>
+                                  <div className="text-xl font-bold text-white">{ll97Result.estimated_emissions_tco2e} <span className="text-sm font-normal text-slate-400">tCO2e</span></div>
+                                </div>
+                                <Flame className="w-8 h-8 text-orange-500 opacity-50" />
+                              </CardContent>
+                            </Card>
+                            <Card className="bg-slate-900/40 backdrop-blur-md border-slate-700/50">
+                              <CardContent className="p-4 flex justify-between items-center">
+                                <div>
+                                  <div className="text-xs text-slate-500 uppercase font-bold tracking-wider mb-1">Phase 2 Limit</div>
+                                  <div className="text-xl font-bold text-emerald-400">{ll97Result.phase2_limit_tco2e} <span className="text-sm font-normal text-emerald-700">tCO2e</span></div>
+                                </div>
+                                <Scale className="w-8 h-8 text-emerald-500 opacity-50" />
+                              </CardContent>
+                            </Card>
+                          </div>
+                        </div>
+
+                        {/* Retrofit Recommendations */}
+                        {ll97Result.retrofits?.length > 0 && (
+                          <div className="bg-blue-900/10 border border-sky-400/20 rounded-xl p-5 mt-6">
+                            <h3 className="font-bold text-white text-lg flex items-center gap-2 mb-4"><Wrench className="w-5 h-5 text-sky-400" /> AI Recommended Solutions</h3>
+                            <div className="space-y-3">
+                              {ll97Result.retrofits.map((r: any, i: number) => (
+                                <div key={i} className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 bg-slate-950/50 border border-slate-800 rounded-lg">
+                                  <div className="flex items-start gap-3">
+                                    <div className={`w-2 h-2 rounded-full mt-2 shrink-0 ${r.priority === 'Critical' || r.priority === 'High' ? 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)]' : r.priority === 'Medium' ? 'bg-amber-400' : 'bg-emerald-500'}`} />
+                                    <div>
+                                      <div className="font-bold text-sky-100 text-sm">{r.action}</div>
+                                      <div className="text-xs text-slate-400 mt-1">Est. Cost: <span className="text-slate-300 font-mono">{r.estimated_cost}</span> &nbsp;|&nbsp; Payback: <span className="text-slate-300 font-mono">{r.payback_years} yrs</span></div>
+                                    </div>
+                                  </div>
+                                  <div className="flex flex-col items-end shrink-0 w-full sm:w-auto">
+                                    <div className="text-emerald-400 font-bold text-sm">-{r.emission_reduction_pct}% CO2</div>
+                                    <Badge variant="outline" className={`mt-1 text-[10px] ${r.priority === 'Critical' || r.priority === 'High' ? 'text-red-400 border-red-500/30' : 'text-emerald-400 border-emerald-500/30'}`}>{r.priority}</Badge>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                            <Button className="w-full mt-4 bg-indigo-500 hover:bg-sky-400 text-white font-bold transition-all"><ClipboardList className="w-4 h-4 mr-2" /> Match with Contractors On Pro Network</Button>
+                          </div>
+                        )}
+                        {/* Timeline */}
+                        {ll97Result.compliance_timeline && (
+                          <div className="p-4 bg-slate-950 border border-slate-700/50 rounded-xl flex items-center gap-3">
+                            <Clock className="w-5 h-5 text-amber-500 shrink-0" />
+                            <p className="text-slate-300 text-sm leading-relaxed">{ll97Result.compliance_timeline}</p>
+                          </div>
+                        )}
+
+                      </motion.div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* CONTRACTORS */}
+            {activeTab === 'contractors' && (
+              <div className="space-y-6">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <h2 className="text-2xl font-bold flex items-center gap-2"><HardHat className="w-6 h-6 text-sky-400" /> Pro Network Marketplace</h2>
+                    <p className="text-muted-foreground mt-1">Find top-rated, verified NYC contractors for your compliance and repair needs.</p>
+                  </div>
+                  <Button className="bg-indigo-500 hover:bg-blue-700 text-white gap-2" onClick={() => alert("Post a job flow placeholder")}>
+                    <ClipboardList className="w-4 h-4" /> Request Quotes
+                  </Button>
+                </div>
+
+                {/* Verified Badge / Trust Banner */}
+                <div className="p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-xl flex items-center gap-4">
+                  <ShieldCheck className="w-8 h-8 text-emerald-500 shrink-0" />
+                  <div className="text-sm text-gray-300">
+                    <strong className="text-emerald-400">AssetGuard Verified Partners.</strong> Every contractor in the Pro Network holds active NYC Department of Buildings (DOB) licenses, verified insurance, and passes rigorous quality checks.
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {contractors.map(c => (
+                    <Card key={c.id} className="bg-slate-900/40 backdrop-blur-md border border-slate-700/50 overflow-hidden relative">
+                      {c.status === 'Connected' && <div className="absolute top-0 right-0 w-12 h-12 bg-sky-500/20 rounded-bl-full flex items-start justify-end p-2"><CheckCircle className="w-4 h-4 text-sky-400" /></div>}
+                      <CardContent className="p-6 space-y-4">
+                        <div className="flex items-center gap-4">
+                          <Avatar className="w-12 h-12 border-2 border-slate-700/50"><AvatarImage src={`https://api.dicebear.com/7.x/initials/svg?seed=${c.name}`} /><AvatarFallback>PRO</AvatarFallback></Avatar>
+                          <div>
+                            <div className="font-bold text-lg text-white">{c.name}</div>
+                            <div className="text-sm text-indigo-400 font-medium">{c.type}</div>
+                          </div>
+                        </div>
+
+                        <div className="flex justify-between items-center text-xs text-slate-400">
+                          <span className="flex items-center gap-1"><Sparkles className="w-3 h-3 text-amber-400" /> 4.9 (120 reviews)</span>
+                          <span>{Math.floor(Math.random() * 50) + 10} jobs completed</span>
+                        </div>
+
+                        {c.status === 'Connected' ? (
+                          <div className="flex gap-2">
+                            <Button className="flex-1 bg-sky-500/20 text-sky-400 hover:bg-sky-500/30" onClick={() => alert(`Messaging ${c.name}...`)}><MessageSquare className="w-4 h-4 mr-2" /> Message</Button>
+                            <Button className="flex-1 bg-slate-800/40 text-white hover:bg-slate-700/50 border border-slate-700/50" onClick={() => alert(`Requesting quote from ${c.name}...`)}>Get Quote</Button>
+                          </div>
+                        ) : (
+                          <Button className="w-full bg-indigo-500/20 text-indigo-400 hover:bg-indigo-500/30 border border-indigo-500/20" onClick={() => {
+                            alert(`Connection request sent to ${c.name}. They will review your property portfolio and respond.`);
+                            toggleContractor(c.id);
+                          }}>
+                            {c.status === 'Pending' ? 'Request Pending...' : 'Connect to Network'}
+                          </Button>
+                        )}
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* SETTINGS VIEW */}
+            {activeTab === 'settings' && (
+              <div className="max-w-xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <div><h2 className="text-3xl font-bold tracking-tight text-white">Organization Profile</h2><p className="text-muted-foreground">Manage your company details and contact info.</p></div>
+
+                <Card className="bg-slate-900/40 backdrop-blur-md border-slate-700/50">
+                  <CardHeader><CardTitle className="text-white">Company Details</CardTitle></CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="space-y-2"><label className="text-sm font-medium text-gray-300">Company Name</label><Input value={editProfile?.company_name || ""} onChange={e => setEditProfile({ ...editProfile, company_name: e.target.value })} className="bg-slate-800/40 border-slate-700/50 text-white" placeholder="e.g. NYC Holdings LLC" /></div>
+                    <div className="space-y-2"><label className="text-sm font-medium text-gray-300">Primary Contact Person</label><Input value={editProfile?.full_name || ""} onChange={e => setEditProfile({ ...editProfile, full_name: e.target.value })} className="bg-slate-800/40 border-slate-700/50 text-white" placeholder="e.g. John Doe" /></div>
+                  </CardContent>
+                </Card>
+
+                <Card className="bg-slate-900/40 backdrop-blur-md border-slate-700/50">
+                  <CardHeader><CardTitle className="text-white">Public Contact Info</CardTitle></CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="space-y-2"><label className="text-sm font-medium text-gray-300">Support Phone</label><Input value={editProfile?.phone || ""} onChange={e => setEditProfile({ ...editProfile, phone: e.target.value })} className="bg-slate-800/40 border-slate-700/50 text-white" placeholder="e.g. 212-555-0199" /></div>
+                    <div className="space-y-2"><label className="text-sm font-medium text-gray-300">Support Email</label><Input value={editProfile?.contact_email || ""} onChange={e => setEditProfile({ ...editProfile, contact_email: e.target.value })} className="bg-slate-800/40 border-slate-700/50 text-white" placeholder="e.g. support@nycholdings.com" /></div>
+                  </CardContent>
+                </Card>
+
+                {/* B2B API ACCESS SETTINGS */}
+                <Card className="bg-slate-900/40 backdrop-blur-md border-slate-700/50 mt-6">
+                  <CardHeader>
+                    <CardTitle className="text-white flex items-center gap-2"><Lock className="w-5 h-5 text-indigo-400" /> B2B API Access</CardTitle>
+                    <CardDescription>Generate API keys to integrate NYC compliance data directly into your own software.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {(!userProfile?.membership_tier || userProfile.membership_tier !== 'Business') ? (
+                      <div className="p-4 bg-indigo-500/10 border border-indigo-500/20 rounded-lg text-center">
+                        <Lock className="w-8 h-8 text-indigo-400 mx-auto mb-3" />
+                        <h4 className="text-white font-bold mb-1">API Access is a Business Tier Feature</h4>
+                        <p className="text-sm text-slate-400 mb-4">Upgrade to the Business Tier ($99/mo) to unlock developer API access and programmatic compliance monitoring.</p>
+                        <Button className="bg-indigo-500 hover:bg-sky-400 text-white" onClick={() => alert("Redirect to Stripe checkout for Business Tier...")}><Sparkles className="w-4 h-4 mr-2 text-amber-400" /> Upgrade to Business</Button>
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        <div className="flex justify-between items-center p-3 bg-slate-950 border border-slate-800/50 rounded-lg">
+                          <div>
+                            <div className="text-sm font-bold text-white">Production API Key</div>
+                            <div className="text-xs text-slate-500 font-mono">sk_live_...</div>
+                          </div>
+                          <Button variant="outline" size="sm" className="border-slate-700/50 text-sky-400 hover:text-sky-300" onClick={() => alert("API Key generated.")}>Generate New Key</Button>
+                        </div>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                <div className="flex justify-end pt-4">
+                  <Button size="lg" className="bg-indigo-500 hover:bg-blue-700 text-white px-8" onClick={handleSaveProfile}>Save Changes</Button>
+                </div>
+              </div>
+            )}
+
+            {/* MAP */}
+            {activeTab === 'map' && <div className="h-full rounded-xl overflow-hidden border border-border"><MapViewer properties={properties.filter(p => !['Pending Verification', 'Rejected'].includes(p.status || ''))} onSelectProperty={setManageProp} /></div>}
+          </div>
+        </ErrorBoundary>
       </main>
 
       {/* MANAGE PROPERTY MODAL */}
@@ -2861,10 +3488,11 @@ export default function APP_ROOT() {
                         <h3 className="text-lg font-bold text-white mb-4">Building Image</h3>
                         <div className="h-64 flex-shrink-0 relative rounded-xl overflow-hidden border border-slate-700/50">
                           <img
-                            src={`/api/streetview?address=${encodeURIComponent(manageProp.address + ', New York, NY')}`}
+                            src={manageProp.image || 'https://images.unsplash.com/photo-1496442226666-8d4d0e62e6e9?auto=format&fit=crop&q=80&w=400&h=300'}
                             crossOrigin="anonymous"
                             className="absolute inset-0 w-full h-full object-cover"
                             alt="Building exterior"
+                            onError={(e) => { e.currentTarget.src = 'https://images.unsplash.com/photo-1496442226666-8d4d0e62e6e9?auto=format&fit=crop&q=80&w=400&h=300'; e.currentTarget.onerror = null; }}
                           />
                         </div>
                         <div className="bg-slate-900/40 backdrop-blur-md border border-slate-700/50 p-4 rounded-xl flex justify-between items-center group cursor-pointer hover:border-slate-600/50 transition-colors" onClick={() => { navigator.clipboard.writeText(manageProp.access_code || ''); showToast("Code Copied!") }}>
@@ -3015,10 +3643,25 @@ export default function APP_ROOT() {
         {showAddProperty && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[9999] bg-black/80 flex items-center justify-center p-4">
             <div className="bg-slate-900/40 backdrop-blur-md border border-slate-700/50 p-6 rounded-xl w-full max-w-md space-y-4 shadow-[0_0_40px_rgba(0,0,0,0.5)]">
-              <div className="flex justify-between items-center mb-2">
-                <h3 className="text-xl font-bold text-white flex items-center gap-2"><Building2 className="w-5 h-5 text-sky-400" /> Add Property</h3>
-                <button onClick={() => setShowAddProperty(false)} className="text-slate-400 hover:text-white"><X className="w-5 h-5" /></button>
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-2xl font-bold text-white flex items-center gap-2"><MapIcon className="text-emerald-400" /> Register Building</h2>
+                <Button variant="ghost" size="icon" className="text-slate-400 hover:text-white" onClick={() => { setShowAddProperty(false); setSearchResults([]); setNewPropAddr(""); setProofDocument(null) }}><X className="w-5 h-5" /></Button>
               </div>
+
+              {userRole === 'manager' && (
+                <div className="bg-slate-900/50 border border-slate-700/50 rounded-lg p-3 mb-6 flex items-center justify-between">
+                  <div>
+                    <div className="text-xs text-slate-400">Plan: <span className="text-emerald-400 font-bold">{userProfile?.membership_tier || 'Free'}</span></div>
+                    <div className="text-sm font-medium text-white">
+                      {properties.filter(p => p.manager_id === userProfile?.id).length} / {getMaxPropertiesByTier(userProfile?.membership_tier) === Infinity ? 'Unlimited' : getMaxPropertiesByTier(userProfile?.membership_tier)} Properties Used
+                    </div>
+                  </div>
+                  {properties.filter(p => p.manager_id === userProfile?.id).length >= getMaxPropertiesByTier(userProfile?.membership_tier) && (
+                    <Badge className="bg-red-500/20 text-red-400 border-red-500/30">Limit Reached</Badge>
+                  )}
+                </div>
+              )}
+
               <div className="space-y-4">
                 <div>
                   <label className="text-xs text-slate-400 mb-1 block">Property Address</label>
@@ -3035,8 +3678,37 @@ export default function APP_ROOT() {
                   )}
                 </div>
 
-                {/* PROOF OF OWNERSHIP UI PLACEHOLDER */}
-                {newPropAddr && searchResults.length === 0 && (
+                {newPropAddr && (
+                  <div className="grid grid-cols-2 gap-4 animate-fade-in">
+                    <div>
+                      <label className="text-xs text-slate-400 mb-1 block">Borough</label>
+                      <select
+                        className="w-full bg-slate-800/40 border-slate-600/50 text-white rounded-md p-2 text-sm border focus:outline-none focus:border-indigo-500"
+                        value={newPropBorough}
+                        onChange={(e) => setNewPropBorough(e.target.value)}
+                      >
+                        <option value="Manhattan">Manhattan</option>
+                        <option value="Brooklyn">Brooklyn</option>
+                        <option value="Queens">Queens</option>
+                        <option value="Bronx">Bronx</option>
+                        <option value="Staten Island">Staten Island</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-xs text-slate-400 mb-1 block">Total Units</label>
+                      <Input
+                        type="number"
+                        min="1"
+                        value={newPropUnits}
+                        onChange={(e) => setNewPropUnits(parseInt(e.target.value) || 1)}
+                        className="bg-slate-800/40 border-slate-600/50 text-white"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* PROOF OF OWNERSHIP UI */}
+                {newPropAddr && (
                   <div className="p-4 bg-indigo-500/10 border border-indigo-500/20 rounded-lg animate-fade-in">
                     <div className="flex items-start gap-3">
                       <ShieldCheck className="w-5 h-5 text-indigo-400 shrink-0 mt-0.5" />
@@ -3049,19 +3721,46 @@ export default function APP_ROOT() {
                             <span>Upload Proof Document</span>
                             <span className="text-slate-500 font-normal">.pdf, .jpg, .png</span>
                           </label>
-                          <div className="flex items-center gap-2 border border-slate-700/50 border-dashed rounded-md p-2 bg-slate-950/50 hover:bg-slate-950 transition-colors cursor-pointer group" onClick={() => alert("File upload dialog placeholder")}>
-                            <div className="w-8 h-8 rounded bg-slate-800 flex items-center justify-center text-slate-400 group-hover:text-indigo-400 transition-colors"><Plus className="w-4 h-4" /></div>
-                            <span className="text-sm text-slate-500 group-hover:text-slate-300 transition-colors">Select file...</span>
-                          </div>
+                          <label className="flex flex-col items-center justify-center gap-2 border border-slate-700/50 border-dashed rounded-md p-4 bg-slate-950/50 hover:bg-slate-950 transition-colors cursor-pointer group text-center">
+                            <input
+                              type="file"
+                              className="hidden"
+                              accept=".pdf,.png,.jpg,.jpeg"
+                              onChange={(e) => {
+                                if (e.target.files && e.target.files.length > 0) {
+                                  setProofDocument(e.target.files[0])
+                                }
+                              }}
+                            />
+                            {proofDocument ? (
+                              <>
+                                <CheckCircle className="w-6 h-6 text-emerald-500" />
+                                <span className="text-sm text-emerald-400 font-medium truncate max-w-[200px]">{proofDocument.name}</span>
+                              </>
+                            ) : (
+                              <>
+                                <div className="w-8 h-8 rounded bg-slate-800 flex items-center justify-center text-slate-400 group-hover:text-indigo-400 transition-colors"><Plus className="w-4 h-4" /></div>
+                                <span className="text-sm text-slate-500 group-hover:text-slate-300 transition-colors">Select file...</span>
+                              </>
+                            )}
+                          </label>
+                          <div className="text-slate-500 text-sm mt-3 flex items-center gap-2"><ShieldCheck className="w-4 h-4 text-emerald-500" /> Document will be securely stored and reviewed by admins.</div>
+                        </div>
+
+                        <div className="flex justify-end pt-4 space-x-3 border-t border-slate-700/50 mt-6">
+                          <Button variant="outline" className="border-slate-700 hover:bg-slate-800 text-slate-300" onClick={() => { setShowAddProperty(false); setSearchResults([]); setNewPropAddr(""); setProofDocument(null) }}>Cancel</Button>
+                          <Button
+                            className="bg-emerald-600 hover:bg-emerald-500 text-white flex items-center gap-2 px-6"
+                            onClick={handleAddProperty}
+                            disabled={!proofDocument || (userRole === 'manager' && properties.filter(p => p.manager_id === userProfile?.id).length >= getMaxPropertiesByTier(userProfile?.membership_tier))}
+                          >
+                            Submit for Verification <ArrowRight className="w-4 h-4" />
+                          </Button>
                         </div>
                       </div>
                     </div>
                   </div>
                 )}
-              </div>
-              <div className="flex justify-end gap-2 pt-4 border-t border-slate-700/50">
-                <Button variant="ghost" onClick={() => setShowAddProperty(false)}>Cancel</Button>
-                <Button className="bg-indigo-500 hover:bg-sky-400 text-white" onClick={handleAddProperty} disabled={!newPropAddr}>Submit for Verification</Button>
               </div>
             </div>
           </motion.div>
@@ -3088,16 +3787,46 @@ export default function APP_ROOT() {
 
               <div className="space-y-4 border-t border-slate-700/50 pt-4">
                 <h4 className="text-sm font-bold text-white">Action</h4>
-                {selectedRequest.status !== 'Resolved' && (
-                  <Button className="w-full bg-emerald-600 hover:bg-emerald-500 text-white mb-2" onClick={() => {
+                {selectedRequest.status === 'Pending' && (
+                  <Button className="w-full bg-sky-600 hover:bg-sky-500 text-white mb-2" onClick={async () => {
+                    setRequests(requests.map(r => r.id === selectedRequest.id ? { ...r, status: 'In Progress' } : r));
+                    const reqId = selectedRequest.id;
+                    setSelectedRequest(null);
+                    showToast("Request marked as In Progress.");
+
+                    const { error } = await supabase
+                      .from('requests')
+                      .update({ status: 'In Progress' })
+                      .eq('id', reqId);
+
+                    if (error) {
+                      showToast("Failed to sync status to database", "error");
+                    }
+                  }}>
+                    <Wrench className="w-4 h-4 mr-2" /> Mark as In Progress
+                  </Button>
+                )}
+                {selectedRequest.status === 'In Progress' && (
+                  <Button className="w-full bg-emerald-600 hover:bg-emerald-500 text-white mb-2" onClick={async () => {
                     setRequests(requests.map(r => r.id === selectedRequest.id ? { ...r, status: 'Resolved' } : r));
+                    const reqId = selectedRequest.id;
                     setSelectedRequest(null);
                     showToast("Request marked as resolved.");
+
+                    const { error } = await supabase
+                      .from('requests')
+                      .update({ status: 'Resolved' })
+                      .eq('id', reqId);
+
+                    if (error) {
+                      console.error("Failed to update request status in DB:", error);
+                      showToast("Failed to sync status to database", "error");
+                    }
                   }}>
                     <CheckCircle className="w-4 h-4 mr-2" /> Mark as Resolved
                   </Button>
                 )}
-                {selectedRequest.status === 'Pending' && (
+                {(selectedRequest.status === 'Pending' || selectedRequest.status === 'In Progress') && (
                   <Button variant="outline" className="w-full border-sky-400/50 text-sky-300 hover:bg-sky-400/10" onClick={() => {
                     setActiveTab('contractors');
                     setSelectedRequest(null);

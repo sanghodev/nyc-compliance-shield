@@ -1,0 +1,32 @@
+{
+  "profiles": [
+    "id",
+    "email",
+    "role",
+    "full_name",
+    "status",
+    "created_at",
+    "membership_tier",
+    "company_code"
+  ],
+  "properties": [
+    "id",
+    "created_at",
+    "address",
+    "borough",
+    "units",
+    "status",
+    "violations",
+    "lat",
+    "lng",
+    "image",
+    "compliance_score",
+    "open_tickets",
+    "name",
+    "access_code",
+    "manager_id",
+    "bin",
+    "bbl",
+    "verification_document_url"
+  ]
+}

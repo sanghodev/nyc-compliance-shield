@@ -24,6 +24,7 @@ export function AuthModal({ isOpen, onClose, defaultRole, selectedTier, onLoginS
     const [error, setError] = useState<string | null>(null)
 
     const [accessCode, setAccessCode] = useState("")
+    const [unit, setUnit] = useState("")
 
     // ... (rest of simple state)
 
@@ -83,19 +84,32 @@ export function AuthModal({ isOpen, onClose, defaultRole, selectedTier, onLoginS
                 // SIGN UP
                 let propertyId = null
 
-                // Validate Access Code
+                // Validate Access Code & Unit for Tenants
                 if (defaultRole === 'tenant') {
-                    // ... (existing tenant check)
-                    if (!accessCode) throw new Error("Access Code required.")
-                    // db check...
+                    if (!accessCode) throw new Error("Property Access Code required.")
+                    if (!unit) throw new Error("Unit number required.")
+
+                    const res = await fetch('/api/validate-tenant', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ access_code: accessCode, unit: unit.trim().toUpperCase() })
+                    })
+                    const data = await res.json()
+
+                    if (!res.ok) {
+                        throw new Error(data.error || "Invalid Access Code or Unit.")
+                    }
+                    propertyId = data.property_id
                 } else if (defaultRole === 'admin') {
-                    // ... (existing admin check)
+                    if (!accessCode) throw new Error("Admin Secret Code required.")
+                    if (accessCode !== 'SUPERADMIN2026') throw new Error("Invalid Admin Secret Code.")
                 }
 
                 // Prepare Metdata
                 const meta = {
                     role: defaultRole,
                     property_id: propertyId,
+                    unit: defaultRole === 'tenant' ? unit.trim().toUpperCase() : null,
                     access_code: accessCode,
                     status: defaultRole === 'manager' ? 'Active' : 'Pending', // Manager active by default for trial
                     membership_tier: selectedTier || 'Starter', // Default to Starter
@@ -160,15 +174,29 @@ export function AuthModal({ isOpen, onClose, defaultRole, selectedTier, onLoginS
                         <div className="space-y-4">
                             {/* Access Code Input (For Tenant & Admin Signup) */}
                             {!isLogin && (defaultRole === 'tenant' || defaultRole === 'admin') && (
-                                <div className="space-y-2">
-                                    <label className="text-sm font-medium text-gray-300">{defaultRole === 'admin' ? 'Admin Secret Code' : 'Property Access Code'}</label>
-                                    <Input
-                                        type="text"
-                                        placeholder={defaultRole === 'admin' ? "Enter secret code" : "Enter code provided by manager"}
-                                        className="bg-zinc-800 border-zinc-700 text-white placeholder:text-zinc-500 h-12"
-                                        value={accessCode}
-                                        onChange={(e) => setAccessCode(e.target.value)}
-                                    />
+                                <div className="space-y-4">
+                                    <div className="space-y-2">
+                                        <label className="text-sm font-medium text-gray-300">{defaultRole === 'admin' ? 'Admin Secret Code' : 'Property Access Code'}</label>
+                                        <Input
+                                            type="text"
+                                            placeholder={defaultRole === 'admin' ? "Enter secret code" : "Enter 6-character code"}
+                                            className="bg-zinc-800 border-zinc-700 text-white placeholder:text-zinc-500 h-12"
+                                            value={accessCode}
+                                            onChange={(e) => setAccessCode(e.target.value.toUpperCase())}
+                                        />
+                                    </div>
+                                    {defaultRole === 'tenant' && (
+                                        <div className="space-y-2">
+                                            <label className="text-sm font-medium text-gray-300">Unit Number</label>
+                                            <Input
+                                                type="text"
+                                                placeholder="e.g. 4B, 12, Penthouse"
+                                                className="bg-zinc-800 border-zinc-700 text-white placeholder:text-zinc-500 h-12"
+                                                value={unit}
+                                                onChange={(e) => setUnit(e.target.value)}
+                                            />
+                                        </div>
+                                    )}
                                 </div>
                             )}
                             <div className="space-y-2">

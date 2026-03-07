@@ -1,0 +1,116 @@
+{
+  "data": [
+    {
+      "id": "73729e7d-ca1b-44c3-87b3-f4cbf40635c5",
+      "email": "sangho0083@gmail.com",
+      "full_name": null,
+      "role": "tenant",
+      "membership_tier": "Free"
+    },
+    {
+      "id": "7419e36f-8b7e-4896-9483-978e880a5853",
+      "email": "donutscan@gmail.com",
+      "full_name": "Sun Kim",
+      "role": "admin",
+      "membership_tier": "Free"
+    },
+    {
+      "id": "a2552043-c46d-4847-b3e1-8141fe696ecf",
+      "email": "jimmy.yang3324@gmail.com",
+      "full_name": "Jimmy K. yang",
+      "role": "manager",
+      "membership_tier": "Free"
+    },
+    {
+      "id": "16ae2ca5-6130-4082-bf3e-894d8da3d74c",
+      "email": "new_manager@example.com",
+      "full_name": "New Manager",
+      "role": "manager",
+      "membership_tier": "Free"
+    },
+    {
+      "id": "66f44205-aa2c-4a17-817e-0343ad7928ff",
+      "email": "tenant6078@test.com",
+      "full_name": "Tenant",
+      "role": "tenant",
+      "membership_tier": "Free"
+    },
+    {
+      "id": "0f65be48-959c-447d-9041-320003ee600d",
+      "email": "tenant1234@test.com",
+      "full_name": "Tenant",
+      "role": "tenant",
+      "membership_tier": "Free"
+    },
+    {
+      "id": "9adb0736-6aa6-4620-8b80-c774e07a2a5d",
+      "email": "manager6229@test.com",
+      "full_name": "Manager",
+      "role": "manager",
+      "membership_tier": "Free"
+    },
+    {
+      "id": "bfbf5d2d-c4f0-40c3-9674-646c51e75368",
+      "email": "admin1581@test.com",
+      "full_name": "Admin",
+      "role": "admin",
+      "membership_tier": "Free"
+    },
+    {
+      "id": "b464209b-442b-487c-88b3-66ae8095f88c",
+      "email": "admin1582@test.com",
+      "full_name": "Admin",
+      "role": "admin",
+      "membership_tier": "Free"
+    },
+    {
+      "id": "fa0876d1-d89c-404c-9758-c1d6ae721c38",
+      "email": "admin9466@test.com",
+      "full_name": "Admin",
+      "role": "admin",
+      "membership_tier": "Free"
+    },
+    {
+      "id": "eb871b3c-93c6-4800-8627-16c925b63a0f",
+      "email": "admin5214@test.com",
+      "full_name": "Admin",
+      "role": "admin",
+      "membership_tier": "Free"
+    },
+    {
+      "id": "6f9e7d5d-3d9c-41cf-8ff4-8bc51d8f9ede",
+      "email": "manager9369@test.com",
+      "full_name": "Manager9369",
+      "role": "manager",
+      "membership_tier": "Growth"
+    },
+    {
+      "id": "774b2d21-49ba-472b-b3cc-ad2720b6b363",
+      "email": "jack@test.com",
+      "full_name": "Jack",
+      "role": "manager",
+      "membership_tier": "Starter"
+    },
+    {
+      "id": "67012800-8395-41fc-b380-7b8d5e0a7845",
+      "email": "manager3511@test.com",
+      "full_name": "Manager",
+      "role": "manager",
+      "membership_tier": "Free"
+    },
+    {
+      "id": "24e79e94-7792-42cc-bcfb-35b8bd135d2d",
+      "email": "manager2706@test.com",
+      "full_name": "Manager",
+      "role": "manager",
+      "membership_tier": "Free"
+    },
+    {
+      "id": "a19d7e7d-ea5c-4980-ad2e-e10115be6559",
+      "email": "manager6848@test.com",
+      "full_name": "Admin",
+      "role": "admin",
+      "membership_tier": "Free"
+    }
+  ]
+}

@@ -1,0 +1,29 @@
+{
+  "data": [
+    {
+      "email": "donutscan@gmail.com",
+      "role": "admin",
+      "id": "7419e36f-8b7e-4896-9483-978e880a5853"
+    },
+    {
+      "email": "admin1581@test.com",
+      "role": "admin",
+      "id": "bfbf5d2d-c4f0-40c3-9674-646c51e75368"
+    },
+    {
+      "email": "admin1582@test.com",
+      "role": "admin",
+      "id": "b464209b-442b-487c-88b3-66ae8095f88c"
+    },
+    {
+      "email": "admin9466@test.com",
+      "role": "admin",
+      "id": "fa0876d1-d89c-404c-9758-c1d6ae721c38"
+    },
+    {
+      "email": "admin5214@test.com",
+      "role": "admin",
+      "id": "eb871b3c-93c6-4800-8627-16c925b63a0f"
+    }
+  ]
+}

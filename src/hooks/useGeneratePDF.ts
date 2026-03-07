@@ -21,10 +21,41 @@ export function useGeneratePDF() {
                 throw new Error(`Element with id "${elementId}" not found`);
             }
 
-            const imgData = await toPng(element, {
-                pixelRatio: 2, // Higher scale for better resolution
-                backgroundColor: '#18181b', // Match the zinc-900 background for a seamless look if dark mode
-            });
+            // Temporarily add a class to force light theme for printing
+            const originalBg = element.style.backgroundColor;
+            element.classList.add('pdf-print-mode');
+
+            // Override text colors and backgrounds recursively for the screenshot
+            const htmlNode = document.documentElement;
+            htmlNode.style.setProperty('--print-bg', '#ffffff');
+            htmlNode.style.setProperty('--print-text', '#000000');
+            htmlNode.style.setProperty('--print-border', '#e2e8f0');
+
+            // Wait a tick for styles to apply
+            await new Promise(resolve => setTimeout(resolve, 100));
+
+            let imgData;
+            try {
+                imgData = await toPng(element, {
+                    pixelRatio: 2, // Higher scale for better resolution
+                    backgroundColor: '#ffffff', // Force white background for the PDF
+                    style: {
+                        color: 'black',
+                        backgroundColor: 'white'
+                    },
+                    filter: (node) => {
+                        // Optional: filter out buttons from the PDF
+                        if (node.tagName === 'BUTTON') return false;
+                        return true;
+                    }
+                });
+            } finally {
+                // Restore original styling
+                element.classList.remove('pdf-print-mode');
+                htmlNode.style.removeProperty('--print-bg');
+                htmlNode.style.removeProperty('--print-text');
+                htmlNode.style.removeProperty('--print-border');
+            }
 
             // Calculate dimensions
             const pdf = new jsPDF({
