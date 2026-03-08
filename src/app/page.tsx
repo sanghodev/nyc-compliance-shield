@@ -132,6 +132,8 @@ interface UserProfile {
   created_at: string
   company_code?: string
   membership_tier?: string
+  unit?: string
+  property_id?: number
 }
 
 // Helper: Get max properties based on membership tier
@@ -1203,9 +1205,9 @@ export default function APP_ROOT() {
     fetchData()
   }, [userRole])
 
-  // Fetch Users for Admin
+  // Fetch Users for Admin and Manager
   useEffect(() => {
-    if (userRole === 'admin') {
+    if (userRole === 'admin' || userRole === 'manager') {
       const fetchUsers = async () => {
         const { data, error } = await supabase.from('profiles').select('*')
         if (data) setUsers(data as UserProfile[])
@@ -2771,8 +2773,8 @@ export default function APP_ROOT() {
                         </tr>
                       </thead>
                       <tbody>
-                        {allProfiles.filter(p => p.role === 'tenant' && activeProperties.some(prop => prop.id === p.property_id)).map((tenant) => {
-                          const prop = activeProperties.find(p => p.id === tenant.property_id);
+                        {users.filter(p => p.role === 'tenant' && properties.some(prop => prop.id === p.property_id)).map((tenant) => {
+                          const prop = properties.find(p => p.id === tenant.property_id);
                           return (
                             <tr key={tenant.id} className="border-b border-slate-800/50 hover:bg-slate-800/30 transition-colors group">
                               <td className="p-4">
@@ -2800,7 +2802,7 @@ export default function APP_ROOT() {
                             </tr>
                           );
                         })}
-                        {allProfiles.filter(p => p.role === 'tenant' && activeProperties.some(prop => prop.id === p.property_id)).length === 0 && (
+                        {users.filter(p => p.role === 'tenant' && properties.some(prop => prop.id === p.property_id)).length === 0 && (
                           <tr>
                             <td colSpan={6} className="text-center p-8 text-slate-500">
                               No tenants registered yet. Distribute your property access codes for tenants to sign up.
@@ -2813,74 +2815,6 @@ export default function APP_ROOT() {
                 </Card>
               </div>
             )}
-
-            {/* MANAGER TENANTS TAB */}
-            {activeTab === 'manager_tenants' && (
-              <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500 fade-in">
-                <div className="flex justify-between items-center bg-slate-900/50 p-6 rounded-2xl border border-slate-800/50 backdrop-blur-sm">
-                  <div>
-                    <h2 className="text-2xl font-bold tracking-tight text-white mb-1">Your Tenants</h2>
-                    <p className="text-slate-400">View and manage tenants registered to your properties.</p>
-                  </div>
-                </div>
-
-                <Card className="bg-slate-900/50 border border-slate-800/50 backdrop-blur-sm overflow-hidden">
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse">
-                      <thead>
-                        <tr className="border-b border-slate-800 bg-slate-900/80">
-                          <th className="p-4 text-xs font-semibold text-slate-400 uppercase tracking-wider">Tenant Name</th>
-                          <th className="p-4 text-xs font-semibold text-slate-400 uppercase tracking-wider">Email</th>
-                          <th className="p-4 text-xs font-semibold text-slate-400 uppercase tracking-wider">Property</th>
-                          <th className="p-4 text-xs font-semibold text-slate-400 uppercase tracking-wider">Unit</th>
-                          <th className="p-4 text-xs font-semibold text-slate-400 uppercase tracking-wider">Status</th>
-                          <th className="p-4 text-xs font-semibold text-slate-400 uppercase tracking-wider">Joined</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {allProfiles.filter(p => p.role === 'tenant' && activeProperties.some(prop => prop.id === p.property_id)).map((tenant) => {
-                          const prop = activeProperties.find(p => p.id === tenant.property_id);
-                          return (
-                            <tr key={tenant.id} className="border-b border-slate-800/50 hover:bg-slate-800/30 transition-colors group">
-                              <td className="p-4">
-                                <span className="text-sm font-semibold text-slate-200">{tenant.full_name || 'Anonymous Tenant'}</span>
-                              </td>
-                              <td className="p-4">
-                                <span className="text-sm text-slate-400">{tenant.email}</span>
-                              </td>
-                              <td className="p-4">
-                                <span className="text-sm text-slate-300">{prop?.address || 'Unknown Property'}</span>
-                              </td>
-                              <td className="p-4">
-                                <Badge variant="outline" className="bg-slate-800 text-slate-300 border-slate-700 whitespace-nowrap">
-                                  {tenant.unit || 'N/A'}
-                                </Badge>
-                              </td>
-                              <td className="p-4">
-                                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                                  {tenant.status}
-                                </span>
-                              </td>
-                              <td className="p-4">
-                                <span className="text-xs text-slate-500">{new Date(tenant.created_at).toLocaleDateString()}</span>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                        {allProfiles.filter(p => p.role === 'tenant' && activeProperties.some(prop => prop.id === p.property_id)).length === 0 && (
-                          <tr>
-                            <td colSpan={6} className="text-center p-8 text-slate-500">
-                              No tenants registered yet. Distribute your property access codes for tenants to sign up.
-                            </td>
-                          </tr>
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                </Card>
-              </div>
-            )}
-
 
             {/* COMPLIANCE CALENDAR */}
             {activeTab === 'calendar' && (
