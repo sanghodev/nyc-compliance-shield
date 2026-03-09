@@ -22,10 +22,10 @@ export default function AboutPage() {
             <div className="pt-32 pb-24 px-6 max-w-4xl mx-auto space-y-16">
                 <div className="text-center space-y-6">
                     <h1 className="text-5xl md:text-7xl font-bold tracking-tighter bg-clip-text text-transparent bg-gradient-to-b from-white to-white/60">
-                        Re-imagining Property Management
+                        Smart Buildings. Total Ease.
                     </h1>
                     <p className="text-xl text-gray-400 max-w-2xl mx-auto leading-relaxed">
-                        AssetGuard was born from a simple frustration: Why is managing buildings in 2026 still so hard? We are building the operating system for the built world.
+                        Evereez was born from a simple frustration: Why is managing buildings in 2026 still so hard? We are building the operating system for the built world.
                     </p>
                 </div>
 
@@ -59,7 +59,7 @@ export default function AboutPage() {
                             <CheckCircle className="w-6 h-6 text-green-500" /> Compliance First
                         </h3>
                         <p className="text-gray-400 leading-relaxed">
-                            NYC regulations are a minefield. AssetGuard acts as your 24/7 compliance officer, ensuring you never miss a filing deadline or face a preventable fine.
+                            NYC regulations are a minefield. Evereez acts as your 24/7 compliance officer, ensuring you never miss a filing deadline or face a preventable fine.
                         </p>
                     </div>
                 </div>
@@ -74,7 +74,7 @@ export default function AboutPage() {
             </div>
 
             <footer className="py-12 border-t border-white/10 text-center bg-black relative z-10 text-gray-600 text-xs">
-                © 2026 AssetGuard. All rights reserved.
+                © 2026 Evereez. All rights reserved.
             </footer>
         </div>
     )

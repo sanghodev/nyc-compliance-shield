@@ -11,7 +11,7 @@ export default function TermsPage() {
                         <ArrowLeft className="w-6 h-6" />
                     </Link>
                     <div className="font-bold text-xl tracking-tight">
-                        AssetGuard <span className="text-gray-500 text-sm font-normal ml-2">Terms of Service</span>
+                        Evereez <span className="text-gray-500 text-sm font-normal ml-2">Terms of Service</span>
                     </div>
                 </div>
             </nav>
@@ -23,7 +23,7 @@ export default function TermsPage() {
                 <section className="space-y-4">
                     <h2 className="text-2xl font-bold text-white">1. Acceptance of Terms</h2>
                     <p>
-                        By accessing or using the AssetGuard website ("Site") and related services ("Services"), you agree to be bound by these Terms of Service ("Terms"). If you do not agree to these Terms, you may not use the Services.
+                        By accessing or using the Evereez website ("Site") and related services ("Services"), you agree to be bound by these Terms of Service ("Terms"). If you do not agree to these Terms, you may not use the Services.
                     </p>
                 </section>
 
@@ -37,7 +37,7 @@ export default function TermsPage() {
                 <section className="space-y-4">
                     <h2 className="text-2xl font-bold text-white">3. Intellectual Property</h2>
                     <p>
-                        The Services and their entire contents, features, and functionality (including but not limited to all information, software, text, displays, images, video, and audio, and the design, selection, and arrangement thereof) are owned by AssetGuard, its licensors, or other providers of such material and are protected by United States and international copyright, trademark, patent, trade secret, and other intellectual property or proprietary rights laws.
+                        The Services and their entire contents, features, and functionality (including but not limited to all information, software, text, displays, images, video, and audio, and the design, selection, and arrangement thereof) are owned by Evereez, its licensors, or other providers of such material and are protected by United States and international copyright, trademark, patent, trade secret, and other intellectual property or proprietary rights laws.
                     </p>
                 </section>
 
@@ -50,14 +50,14 @@ export default function TermsPage() {
                         <li>In any way that violates any applicable federal, state, local, or international law or regulation.</li>
                         <li>To send, knowingly receive, upload, download, use, or re-use any material that does not comply with the content standards set out in these Terms.</li>
                         <li>To transmit, or procure the sending of, any advertising or promotional material, including any "junk mail," "chain letter," "spam," or any other similar solicitation.</li>
-                        <li>To impersonate or attempt to impersonate AssetGuard, a AssetGuard employee, another user, or any other person or entity.</li>
+                        <li>To impersonate or attempt to impersonate Evereez, a Evereez employee, another user, or any other person or entity.</li>
                     </ul>
                 </section>
 
                 <section className="space-y-4">
                     <h2 className="text-2xl font-bold text-white">5. Limitation of Liability</h2>
                     <p>
-                        IN NO EVENT WILL ASSETGUARD, ITS AFFILIATES, OR THEIR LICENSORS, SERVICE PROVIDERS, EMPLOYEES, AGENTS, OFFICERS, OR DIRECTORS BE LIABLE FOR DAMAGES OF ANY KIND, UNDER ANY LEGAL THEORY, ARISING OUT OF OR IN CONNECTION WITH YOUR USE, OR INABILITY TO USE, THE SERVICES.
+                        IN NO EVENT WILL EVEREEZ, ITS AFFILIATES, OR THEIR LICENSORS, SERVICE PROVIDERS, EMPLOYEES, AGENTS, OFFICERS, OR DIRECTORS BE LIABLE FOR DAMAGES OF ANY KIND, UNDER ANY LEGAL THEORY, ARISING OUT OF OR IN CONNECTION WITH YOUR USE, OR INABILITY TO USE, THE SERVICES.
                     </p>
                 </section>
 

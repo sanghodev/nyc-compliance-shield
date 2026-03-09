@@ -175,7 +175,7 @@ function LandingPage({ onEnter, publicSearchQuery, handlePublicSearch, handleSea
         <div className="max-w-7xl mx-auto px-6 flex justify-between items-center">
           <div className="flex items-center gap-2 font-bold text-xl tracking-tight">
             <Building2 className={`w-6 h-6 ${isScrolled ? 'text-sky-400' : 'text-white'}`} />
-            <span>Asset<span className="text-slate-400">Guard</span></span>
+            <span>Evereez<span className="text-sm text-slate-300 ml-3 hidden sm:inline-block font-normal">Everything Managed. Effortlessly.</span></span>
           </div>
           <div className="flex items-center gap-4">
             <Button variant="ghost" className="text-gray-300 hover:text-white hover:bg-white/10 transition-colors" onClick={() => onEnter("tenant")}>Tenant Portal</Button>
@@ -194,8 +194,14 @@ function LandingPage({ onEnter, publicSearchQuery, handlePublicSearch, handleSea
           <motion.div initial={{ opacity: 0, y: 50 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 1 }}>
             <Badge className="mb-4 bg-white/10 text-white hover:bg-white/20 border-white/20 px-4 py-1 text-sm transition-colors">🚀 Now servicing 500+ NYC Buildings</Badge>
             <h1 className="text-6xl md:text-8xl font-bold tracking-tighter bg-clip-text text-transparent bg-gradient-to-b from-white to-white/60 leading-[1.1] pb-4">
-              Property Management.<br />Re-imagined by AI.
+              Smart Buildings.<br />Total Ease.
             </h1>
+            <p className="text-xl md:text-2xl text-sky-400 font-bold mb-4">
+              Powered by Evereez.
+            </p>
+            <p className="text-lg md:text-xl text-slate-200 max-w-2xl mx-auto mb-8">
+              The first AI-driven platform that turns complex NYC compliance into absolute simplicity.
+            </p>
           </motion.div>
 
           {/* Public Search Input */}
@@ -268,7 +274,7 @@ function LandingPage({ onEnter, publicSearchQuery, handlePublicSearch, handleSea
       <section className="py-32 px-6 bg-slate-950">
         <div className="max-w-4xl mx-auto text-center space-y-16">
           <div className="space-y-4">
-            <h2 className="text-4xl md:text-5xl font-bold text-white">Why AssetGuard?</h2>
+            <h2 className="text-4xl md:text-5xl font-bold text-white">Why Evereez?</h2>
             <p className="text-xl text-slate-400">Old ways vs. The New Way</p>
           </div>
 
@@ -285,7 +291,7 @@ function LandingPage({ onEnter, publicSearchQuery, handlePublicSearch, handleSea
 
             <div className="border border-emerald-500/20 bg-emerald-500/5 rounded-2xl p-8 space-y-6 relative overflow-hidden">
               <div className="absolute top-0 right-0 p-4 opacity-10"><Shield className="w-40 h-40 text-emerald-500" /></div>
-              <div className="flex items-center gap-3 text-emerald-500 font-bold text-xl"><CheckCircle className="w-6 h-6" /> AssetGuard Way</div>
+              <div className="flex items-center gap-3 text-emerald-500 font-bold text-xl"><CheckCircle className="w-6 h-6" /> Evereez Way</div>
               <ul className="space-y-4 text-left text-gray-300">
                 <li className="flex gap-3"><Zap className="w-5 h-5 text-emerald-500 shrink-0" /> Proactive AI alerts before fines hit</li>
                 <li className="flex gap-3"><PenTool className="w-5 h-5 text-emerald-500 shrink-0" /> 1-Click Affidavit Generation</li>
@@ -492,7 +498,7 @@ function LandingPage({ onEnter, publicSearchQuery, handlePublicSearch, handleSea
             <motion.div whileHover={{ y: -10 }} className="p-8 rounded-3xl bg-gradient-to-b from-purple-900/20 to-black border border-purple-500/30 flex flex-col relative overflow-hidden">
               <div className="absolute inset-0 bg-purple-500/5 z-0"></div>
               <div className="relative z-10">
-                <div className="text-purple-400 font-bold tracking-widest text-sm mb-4 uppercase flex items-center gap-2"><Sparkles className="w-4 h-4" /> AssetGuard Premium</div>
+                <div className="text-purple-400 font-bold tracking-widest text-sm mb-4 uppercase flex items-center gap-2"><Sparkles className="w-4 h-4" /> Evereez Premium</div>
                 <div className="text-4xl font-bold text-white mb-2">Custom<span className="text-lg text-slate-500 font-normal"></span></div>
                 <p className="text-slate-400 mb-8">We manage everything for you.</p>
 
@@ -502,7 +508,7 @@ function LandingPage({ onEnter, publicSearchQuery, handlePublicSearch, handleSea
                   <li className="flex gap-3 text-white"><CheckCircle className="w-5 h-5 text-purple-500" /> 24/7 White-Glove Support</li>
                   <li className="flex gap-3 text-white"><CheckCircle className="w-5 h-5 text-purple-500" /> Full Legal Representation</li>
                 </ul>
-                <Button className="w-full bg-white hover:bg-gray-200 text-black font-bold py-6 rounded-xl" onClick={() => window.open('mailto:sales@assetguard.com')}>Contact Sales</Button>
+                <Button className="w-full bg-white hover:bg-gray-200 text-black font-bold py-6 rounded-xl" onClick={() => window.open('mailto:sales@evereez.com')}>Contact Sales</Button>
               </div>
             </motion.div>
           </div>
@@ -515,7 +521,7 @@ function LandingPage({ onEnter, publicSearchQuery, handlePublicSearch, handleSea
             </div>
             <div className="flex gap-3">
               <Button variant="outline" className="border-amber-500/30 text-orange-400 hover:bg-orange-950 px-6 py-4 rounded-xl" onClick={() => window.open('tel:+12125550199')}>Call Us</Button>
-              <Button className="bg-orange-600 hover:bg-orange-700 text-white px-6 py-4 rounded-xl" onClick={() => window.open('mailto:partners@assetguard.com')}>Email Us</Button>
+              <Button className="bg-orange-600 hover:bg-orange-700 text-white px-6 py-4 rounded-xl" onClick={() => window.open('mailto:partners@evereez.com')}>Email Us</Button>
             </div>
           </div>
 
@@ -555,7 +561,7 @@ function LandingPage({ onEnter, publicSearchQuery, handlePublicSearch, handleSea
       </section>
 
       <footer className="py-12 border-t border-white/10 text-center bg-black relative z-10">
-        <div className="flex justify-center items-center gap-2 mb-4 text-xl font-bold"><Building2 className="w-6 h-6 text-indigo-500" /> AssetGuard</div>
+        <div className="flex justify-center items-center gap-2 mb-4 text-xl font-bold"><Building2 className="w-6 h-6 text-indigo-500" /> Evereez</div>
         <div className="flex justify-center gap-6 text-sm text-slate-500 mb-8">
           <Link href="/about" className="hover:text-white cursor-pointer transition-colors">About Us</Link>
           <Link href="/privacy" className="hover:text-white cursor-pointer transition-colors">Privacy Policy</Link>
@@ -2612,7 +2618,7 @@ export default function APP_ROOT() {
 
       {/* Sidebar */}
       <aside className="w-64 border-r border-border bg-card/50 flex flex-col z-20 shadow-[0_0_40px_rgba(0,0,0,0.5)]">
-        <div className="h-16 flex items-center px-6 border-b border-border font-bold text-xl cursor-pointer hover:text-sky-400 transition-colors" onClick={async () => { await supabase.auth.signOut(); setUserRole(null); }}><Building2 className="w-6 h-6 mr-2 text-sky-400" />AssetGuard</div>
+        <div className="h-16 flex items-center px-6 border-b border-border font-bold text-xl cursor-pointer hover:text-sky-400 transition-colors" onClick={async () => { await supabase.auth.signOut(); setUserRole(null); }}><Building2 className="w-6 h-6 mr-2 text-sky-400" />Evereez</div>
 
         {/* MEMBERSHIP BADGE */}
         {userProfile?.membership_tier ? (
@@ -2693,7 +2699,7 @@ export default function APP_ROOT() {
                 ) : (
                   <div className="p-12 text-center bg-slate-900/40 backdrop-blur-md border border-slate-700/50 rounded-xl">
                     <Building2 className="w-14 h-14 mx-auto text-slate-600 mb-4" />
-                    <h3 className="text-xl font-bold text-white mb-2">Welcome to AssetGuard</h3>
+                    <h3 className="text-xl font-bold text-white mb-2">Welcome to Evereez</h3>
                     <p className="text-slate-400 mb-6">Register your first property to start monitoring compliance, violations, and tenant requests.</p>
                     <Button className="bg-primary text-white gap-2" onClick={() => setShowAddProperty(true)}><Plus className="w-4 h-4" /> Add Your First Property</Button>
                   </div>
@@ -3267,7 +3273,7 @@ export default function APP_ROOT() {
                 <div className="p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-xl flex items-center gap-4">
                   <ShieldCheck className="w-8 h-8 text-emerald-500 shrink-0" />
                   <div className="text-sm text-gray-300">
-                    <strong className="text-emerald-400">AssetGuard Verified Partners.</strong> Every contractor in the Pro Network holds active NYC Department of Buildings (DOB) licenses, verified insurance, and passes rigorous quality checks.
+                    <strong className="text-emerald-400">Evereez Verified Partners.</strong> Every contractor in the Pro Network holds active NYC Department of Buildings (DOB) licenses, verified insurance, and passes rigorous quality checks.
                   </div>
                 </div>
 
@@ -3788,7 +3794,7 @@ export default function APP_ROOT() {
                   <h3 className="text-xl font-bold text-white flex items-center gap-2">
                     <Sparkles className="w-5 h-5 text-amber-400" /> Plan Details & Upgrade
                   </h3>
-                  <p className="text-sm text-slate-400">Manage your AssetGuard subscription and limits.</p>
+                  <p className="text-sm text-slate-400">Manage your Evereez subscription and limits.</p>
                 </div>
                 <button onClick={() => setShowUpgradeModal(false)} className="text-slate-400 hover:text-white transition-colors"><X className="w-5 h-5" /></button>
               </div>

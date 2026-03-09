@@ -33,7 +33,7 @@ export default function ContactPage() {
                         <ArrowLeft className="w-6 h-6" />
                     </Link>
                     <div className="font-bold text-xl tracking-tight">
-                        AssetGuard <span className="text-gray-500 text-sm font-normal ml-2">Contact Support</span>
+                        Evereez <span className="text-gray-500 text-sm font-normal ml-2">Contact Support</span>
                     </div>
                 </div>
             </nav>
@@ -53,7 +53,7 @@ export default function ContactPage() {
                                 </div>
                                 <div>
                                     <div className="font-bold text-white">Email Us</div>
-                                    <div className="text-sm">support@assetguard.nyc</div>
+                                    <div className="text-sm">support@evereez.com</div>
                                 </div>
                             </div>
                             <div className="flex items-center gap-4 text-gray-300">

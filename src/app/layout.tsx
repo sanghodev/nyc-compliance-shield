@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "AssetGuard — NYC Property Compliance Platform",
-  description: "AI-powered property management and compliance tracking for NYC buildings. Navigate local laws, track violations, and streamline compliance.",
+  title: "Evereez — NYC Property Compliance Platform",
+  description: "The first AI-driven platform that turns complex NYC compliance into absolute simplicity. Smart Buildings. Total Ease. Powered by Evereez.",
 };
 
 export default function RootLayout({

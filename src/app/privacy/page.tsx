@@ -11,7 +11,7 @@ export default function PrivacyPage() {
                         <ArrowLeft className="w-6 h-6" />
                     </Link>
                     <div className="font-bold text-xl tracking-tight">
-                        AssetGuard <span className="text-gray-500 text-sm font-normal ml-2">Privacy Policy</span>
+                        Evereez <span className="text-gray-500 text-sm font-normal ml-2">Privacy Policy</span>
                     </div>
                 </div>
             </nav>
@@ -23,7 +23,7 @@ export default function PrivacyPage() {
                 <section className="space-y-4">
                     <h2 className="text-2xl font-bold text-white">1. Introduction</h2>
                     <p>
-                        Welcome to AssetGuard ("we," "our," or "us"). We are committed to protecting your privacy and ensuring you have a positive experience on our website and in using our services. This policy outlines our handling practices and how we collect and use the Personal Data you provide during your interactions with us.
+                        Welcome to Evereez ("we," "our," or "us"). We are committed to protecting your privacy and ensuring you have a positive experience on our website and in using our services. This policy outlines our handling practices and how we collect and use the Personal Data you provide during your interactions with us.
                     </p>
                 </section>
 
@@ -64,7 +64,7 @@ export default function PrivacyPage() {
                 <section className="space-y-4">
                     <h2 className="text-2xl font-bold text-white">5. Contact Information</h2>
                     <p>
-                        To ask questions or comment about this privacy policy and our privacy practices, contact us at: <a href="mailto:privacy@assetguard.nyc" className="text-blue-500 hover:underline">privacy@assetguard.nyc</a>
+                        To ask questions or comment about this privacy policy and our privacy practices, contact us at: <a href="mailto:privacy@evereez.com" className="text-blue-500 hover:underline">privacy@evereez.com</a>
                     </p>
                 </section>
 

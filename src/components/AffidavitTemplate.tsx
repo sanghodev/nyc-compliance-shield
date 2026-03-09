@@ -12,7 +12,7 @@ export default function AffidavitTemplate({ property, violation, htmlContent }: 
             {/* Header */}
             <div className="border-b-4 border-slate-800 pb-6 mb-8 flex justify-between items-end">
                 <div>
-                    <h1 className="text-4xl font-serif font-bold text-slate-900 leading-tight">AssetGuard</h1>
+                    <h1 className="text-4xl font-serif font-bold text-slate-900 leading-tight">Evereez</h1>
                     <p className="text-sm font-sans text-slate-600 mt-1 uppercase tracking-widest">Official Legal Correspondence</p>
                 </div>
                 <div className="text-right">
