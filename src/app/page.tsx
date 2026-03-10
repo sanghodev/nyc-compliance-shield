@@ -10,7 +10,7 @@ import {
   Wrench, CheckCircle, AlertTriangle, Filter, CreditCard,
   ArrowUpRight, Activity, X, MessageSquare, Send,
   Shield, ShieldCheck, Zap, BarChart3, ChevronDown, ChevronUp,
-  Sparkles, ArrowRight, Scale, Flame, HardHat, Calendar, ArrowUpCircle, Download, Leaf, Clock, ClipboardList, PenTool, Smartphone, Phone, Lock, Trash2, Home, Copy, Check, ShieldAlert
+  Sparkles, ArrowRight, Scale, Flame, HardHat, Calendar, ArrowUpCircle, Download, Leaf, Clock, ClipboardList, PenTool, Smartphone, Phone, Lock, Trash2, Home, Copy, Check, ShieldAlert, History as HistoryIcon
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -130,6 +130,7 @@ interface UserProfile {
   role: string
   status: "Pending" | "Active" | "Suspended"
   created_at: string
+  company_name?: string
   company_code?: string
   membership_tier?: string
   unit?: string
@@ -415,7 +416,7 @@ function LandingPage({ onEnter, publicSearchQuery, handlePublicSearch, handleSea
               </div>
               <div className="bg-slate-900/40 backdrop-blur-md/50 p-4 rounded-xl border border-slate-700/50">
                 <Users className="text-amber-500 mb-2" />
-                <h4 className="font-bold text-sm">Pro Network</h4>
+                <h4 className="font-bold text-sm">Professional Network</h4>
                 <p className="text-xs text-slate-500">Vetted Contractors</p>
               </div>
             </div>
@@ -472,7 +473,7 @@ function LandingPage({ onEnter, publicSearchQuery, handlePublicSearch, handleSea
               <ul className="space-y-4 mb-8 flex-1">
                 <li className="flex gap-3 text-gray-300"><CheckCircle className="w-5 h-5 text-zinc-600" /> Up to 3 Units</li>
                 <li className="flex gap-3 text-gray-300"><CheckCircle className="w-5 h-5 text-zinc-600" /> Basic AI Violation Alerts</li>
-                <li className="flex gap-3 text-gray-300"><CheckCircle className="w-5 h-5 text-zinc-600" /> Access to Pro Marketplace</li>
+                <li className="flex gap-3 text-gray-300"><CheckCircle className="w-5 h-5 text-zinc-600" /> Access to Contractor Marketplace</li>
                 <li className="flex gap-3 text-gray-300"><CheckCircle className="w-5 h-5 text-zinc-600" /> Tenant Mobile App</li>
               </ul>
               <Button className="w-full bg-slate-800/40 hover:bg-zinc-700 text-white font-bold py-6 rounded-xl" onClick={() => onEnter("manager", "Starter")}>Start Free Trial</Button>
@@ -488,7 +489,7 @@ function LandingPage({ onEnter, publicSearchQuery, handlePublicSearch, handleSea
               <ul className="space-y-4 mb-8 flex-1">
                 <li className="flex gap-3 text-white"><CheckCircle className="w-5 h-5 text-sky-400" /> Up to 20 Units</li>
                 <li className="flex gap-3 text-white"><CheckCircle className="w-5 h-5 text-sky-400" /> <b>Instant AI Affidavits</b></li>
-                <li className="flex gap-3 text-white"><CheckCircle className="w-5 h-5 text-sky-400" /> Priority Pro Dispatch</li>
+                <li className="flex gap-3 text-white"><CheckCircle className="w-5 h-5 text-sky-400" /> Priority Expert Dispatch</li>
                 <li className="flex gap-3 text-white"><CheckCircle className="w-5 h-5 text-sky-400" /> Financial Forecasting</li>
               </ul>
               <Button className="w-full bg-indigo-500 hover:bg-sky-400 text-white font-bold py-6 rounded-xl shadow-lg shadow-blue-900/40" onClick={() => onEnter("manager", "Growth")}>Get Started</Button>
@@ -1091,6 +1092,122 @@ function PropertyDetailsModal({ property, cityData, onClose }: { property: Prope
   )
 }
 
+function DocumentPreviewModal({ doc, onClose }: { doc: any, onClose: () => void }) {
+  if (!doc) return null
+  return (
+    <AnimatePresence>
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[10000] flex items-center justify-center p-4">
+        <div className="absolute inset-0 bg-black/95 backdrop-blur-md" onClick={onClose} />
+        <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="bg-slate-900/60 backdrop-blur-xl border border-slate-700/50 rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden relative shadow-2xl z-10 flex flex-col">
+          {/* Header */}
+          <div className="p-6 border-b border-slate-800 flex justify-between items-start bg-slate-950/40">
+            <div className="flex-1 min-w-0 pr-4">
+              <div className="flex items-center gap-2 mb-1">
+                <Badge className="bg-sky-500/20 text-sky-400 border-sky-500/30 capitalize">{doc.category}</Badge>
+                {doc.expires_at && (
+                  <Badge className={`${new Date(doc.expires_at) < new Date() ? 'bg-red-500/20 text-red-400 border-red-500/30' : 'bg-amber-500/20 text-amber-500 border-amber-500/30'}`}>
+                    Expires: {new Date(doc.expires_at).toLocaleDateString()}
+                  </Badge>
+                )}
+              </div>
+              <h2 className="text-xl font-bold text-white truncate">{doc.file_name}</h2>
+            </div>
+            <Button variant="ghost" size="icon" className="text-slate-400 hover:text-white" onClick={onClose}><X className="w-5 h-5" /></Button>
+          </div>
+
+          {/* Content */}
+          <div className="flex-1 overflow-y-auto p-6 space-y-6 scrollbar-thin scrollbar-thumb-slate-800">
+            {/* Preview / Link */}
+            <div className="aspect-video bg-slate-950 rounded-xl border border-slate-800 flex flex-col items-center justify-center gap-4 relative overflow-hidden group">
+              {doc.file_type?.includes('image') ? (
+                <img src={doc.file_url} className="w-full h-full object-contain" />
+              ) : (
+                <>
+                  <FileText className="w-16 h-16 text-slate-700" />
+                  <p className="text-sm text-slate-500 font-mono">{doc.file_type}</p>
+                </>
+              )}
+              <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                <Button className="bg-white text-black hover:bg-sky-400 hover:text-white" onClick={() => window.open(doc.file_url, '_blank')}>
+                  <Download className="w-4 h-4 mr-2" /> View Full File
+                </Button>
+              </div>
+            </div>
+
+            {/* AI Analysis section */}
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 text-sky-400 font-bold uppercase tracking-widest text-xs">
+                <Sparkles className="w-4 h-4" /> AI Extraction Summary
+              </div>
+              <div className="bg-slate-950/50 border border-slate-800 p-4 rounded-xl text-slate-300 text-sm italic leading-relaxed">
+                "{doc.ai_summary || "Document analysis in progress. Please check back in a few moments."}"
+              </div>
+
+              {doc.ai_processed && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Key Dates */}
+                  <div className="bg-slate-900/40 p-4 rounded-xl border border-slate-800/50">
+                    <div className="text-[10px] text-slate-500 font-bold uppercase mb-3 flex items-center gap-2">
+                      <Calendar className="w-3 h-3" /> Key Dates
+                    </div>
+                    <div className="space-y-2">
+                      {Array.isArray(doc.ai_key_dates) && doc.ai_key_dates.length > 0 ? doc.ai_key_dates.map((d: any, i: number) => (
+                        <div key={i} className="flex justify-between text-xs items-center">
+                          <span className="text-slate-400">{d.label}:</span>
+                          <span className="text-white font-mono bg-slate-950 px-2 py-0.5 rounded border border-slate-800">{d.date}</span>
+                        </div>
+                      )) : <p className="text-[10px] text-slate-600 italic">No dates detected</p>}
+                    </div>
+                  </div>
+                  {/* Amounts */}
+                  <div className="bg-slate-900/40 p-4 rounded-xl border border-slate-800/50">
+                    <div className="text-[10px] text-slate-500 font-bold uppercase mb-3 flex items-center gap-2">
+                      <CreditCard className="w-3 h-3" /> Financials
+                    </div>
+                    <div className="space-y-2">
+                      {Array.isArray(doc.ai_amounts) && doc.ai_amounts.length > 0 ? doc.ai_amounts.map((a: any, i: number) => (
+                        <div key={i} className="flex justify-between text-xs items-center">
+                          <span className="text-slate-400">{a.label}:</span>
+                          <span className="text-emerald-400 font-bold">{a.amount}</span>
+                        </div>
+                      )) : <p className="text-[10px] text-slate-600 italic">No financial data detected</p>}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Parties */}
+            {Array.isArray(doc.ai_parties) && doc.ai_parties.length > 0 && (
+              <div className="space-y-2">
+                <div className="text-[10px] text-slate-500 font-bold uppercase flex items-center gap-2">
+                  <Users className="w-3 h-3" /> Relevant Parties
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {doc.ai_parties.map((p: string, i: number) => <Badge key={i} variant="outline" className="text-xs border-slate-700 text-slate-400">{p}</Badge>)}
+                </div>
+              </div>
+            )}
+
+            {/* Notes */}
+            {doc.notes && (
+              <div className="space-y-2 pt-2 border-t border-slate-800">
+                <div className="text-[10px] text-slate-500 font-bold uppercase">Manual Notes</div>
+                <p className="text-sm text-slate-400 bg-slate-800/20 p-3 rounded-lg border border-slate-700/30 line-clamp-3">{doc.notes}</p>
+              </div>
+            )}
+          </div>
+
+          <div className="p-6 border-t border-slate-800 flex justify-end bg-slate-950/40 gap-3">
+            <Button variant="outline" className="border-slate-700 text-slate-400 hover:text-white" onClick={onClose}>Close</Button>
+            <Button className="bg-sky-500 hover:bg-sky-400 text-white" onClick={() => window.open(doc.file_url, '_blank')}>Download PDF</Button>
+          </div>
+        </motion.div>
+      </motion.div>
+    </AnimatePresence>
+  )
+}
+
 // --- MAIN APP ---
 export default function APP_ROOT() {
   const [userRole, setUserRole] = useState<UserRole>(null)
@@ -1098,6 +1215,23 @@ export default function APP_ROOT() {
   const [isLoaded, setIsLoaded] = useState(false)
   const [userProfile, setUserProfile] = useState<any>(null)
   const [editProfile, setEditProfile] = useState<any>({}) // Local buffer for edits
+
+  // AI Compliance Autopilot State
+  const [complianceResolutions, setComplianceResolutions] = useState<any[]>([])
+  const [isAnalyzingAutopilot, setIsAnalyzingAutopilot] = useState(false)
+
+  // Document Vault State
+  const [vaultDocuments, setVaultDocuments] = useState<any[]>([])
+  const [isUploadingDoc, setIsUploadingDoc] = useState(false)
+  const [selectedDoc, setSelectedDoc] = useState<any>(null)
+  const [docFilter, setDocFilter] = useState('all')
+
+  // Autopilot Interaction State
+  const [activeAutopilotStep, setActiveAutopilotStep] = useState<any>(null)
+  const [matchingContractors, setMatchingContractors] = useState<any[]>([])
+  const [isMatchingPro, setIsMatchingPro] = useState(false)
+  const [isGeneratingStepDoc, setIsGeneratingStepDoc] = useState(false)
+  const [showDocPreview, setShowDocPreview] = useState<any>(null)
 
   // PDF Report Hook
   const { generatePDF, isGenerating: isGeneratingPDF } = useGeneratePDF()
@@ -1147,8 +1281,22 @@ export default function APP_ROOT() {
         const role = session.user.user_metadata.role
         // Allow admin role
         if (['manager', 'tenant', 'admin'].includes(role)) setUserRole(role)
-        setUserProfile(session.user.user_metadata)
-        setEditProfile(session.user.user_metadata)
+
+        // Fetch full profile from database as source of truth
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', session.user.id)
+          .single()
+
+        if (profile) {
+          setUserProfile(profile)
+          setEditProfile(profile)
+        } else {
+          // Fallback to metadata if profile not found
+          setUserProfile(session.user.user_metadata)
+          setEditProfile(session.user.user_metadata)
+        }
       }
     }
     checkSession()
@@ -1168,6 +1316,10 @@ export default function APP_ROOT() {
       if (!user) return
 
       const role = user.user_metadata?.role || userRole;
+
+      // Ensure userProfile is synced with DB
+      const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single()
+      if (profile) setUserProfile(profile)
 
       // 1. Fetch Properties (Isolated for Managers)
       let propsQuery = supabase.from('properties').select('*')
@@ -1194,9 +1346,48 @@ export default function APP_ROOT() {
           setRequests([])
           return
         }
+
       } else if (role === 'tenant') {
         reqsQuery = reqsQuery.eq('tenant_id', user.id)
       }
+
+      // 4. Fetch AI Compliance Resolutions
+      const fetchAutopilot = async () => {
+        const { data: { session } } = await supabase.auth.getSession()
+        if (!session) return
+        try {
+          const res = await fetch('/api/compliance-autopilot?property_id=' + (props?.[0]?.id || 0), {
+            headers: { Authorization: `Bearer ${session.access_token}` }
+          })
+          const json = await res.json()
+          if (json.data) setComplianceResolutions(json.data)
+        } catch (e) { console.error("Autopilot Fetch Error:", e) }
+      }
+      fetchAutopilot()
+
+      // 5. Fetch Documents
+      const fetchDocs = async () => {
+        const { data: { session } } = await supabase.auth.getSession()
+        if (!session) return
+        try {
+          const res = await fetch('/api/documents', {
+            headers: { Authorization: `Bearer ${session.access_token}` }
+          })
+          const json = await res.json()
+          if (json.data) setVaultDocuments(json.data)
+        } catch (e) { console.error("Docs Fetch Error:", e) }
+      }
+      fetchDocs()
+
+      // 6. Refresh Contractors from real individual DB
+      const fetchContractors = async () => {
+        try {
+          const res = await fetch('/api/contractors')
+          const json = await res.json()
+          if (json.data) setContractors(json.data)
+        } catch (e) { console.error("Contractors API Error:", e) }
+      }
+      fetchContractors()
 
       const { data: reqs } = await reqsQuery
       if (reqs) {
@@ -1228,7 +1419,7 @@ export default function APP_ROOT() {
   const [searchResults, setSearchResults] = useState<SearchResult[]>([])
   const [selectedLocation, setSelectedLocation] = useState<{ lat: number, lng: number, bin?: string, bbl?: string } | null>(null)
   const [isSearching, setIsSearching] = useState(false)
-  const [editingCompanyData, setEditingCompanyData] = useState<{ id: string, name: string, email: string, tier: string } | null>(null)
+  const [editingCompanyData, setEditingCompanyData] = useState<{ id: string, name: string, company_name: string, email: string, tier: string } | null>(null)
   const [isEditingCompany, setIsEditingCompany] = useState(false)
 
   const [chatUser, setChatUser] = useState<Contractor | null>(null)
@@ -1239,44 +1430,55 @@ export default function APP_ROOT() {
   const [oathLoading, setOathLoading] = useState(false)
   const [ll84Data, setLl84Data] = useState<any>(null)
   const [ll84Loading, setLl84Loading] = useState(false)
-  const [propTab, setPropTab] = useState<'details' | 'violations' | 'oath'>('details')
+  const [propTab, setPropTab] = useState<'details' | 'violations' | 'oath' | 'autopilot' | 'vault'>('details')
+  const [isDeletingProperty, setIsDeletingProperty] = useState(false)
+
+  // SECURE DELETE MODAL STATE
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
+  const [deleteConfirmText, setDeleteConfirmText] = useState("")
+  const [onConfirmDelete, setOnConfirmDelete] = useState<(() => Promise<void>) | null>(null)
+  const [deleteConfirmTitle, setDeleteConfirmTitle] = useState("Confirm Deletion")
+  const [deleteConfirmMessage, setDeleteConfirmMessage] = useState("Are you sure you want to PERMANENTLY delete this? This action cannot be undone.")
 
   // Fetch NYC Open Data
   const fetchCityData = async (address: string, bin?: string, bbl?: string) => {
     setPropCityData(null) // Reset
     try {
+      let currentBin = bin
+      let currentBbl = bbl
+
+      // 0. SELF-HEALING: If BIN/BBL are missing, try to find them via GeoSearch
+      if (!currentBin && address) {
+        console.log("Self-healing: Fetching missing BIN for", address)
+        const geoRes = await fetch(`https://geosearch.planninglabs.nyc/v2/search?text=${encodeURIComponent(address)}`)
+        const geoData = await geoRes.json()
+        if (geoData.features && geoData.features.length > 0) {
+          const first = geoData.features[0]
+          currentBin = first.properties?.addendum?.pad?.bin || first.properties?.pad_bin || first.properties?.bin || ""
+          currentBbl = first.properties?.addendum?.pad?.bbl || first.properties?.pad_bbl || first.properties?.bbl || ""
+          console.log("Self-healing: Found BIN", currentBin, "BBL", currentBbl)
+        }
+      }
+
+      console.log("Fetching City Data for:", { address, currentBin, currentBbl })
+
       let vioUrl = ""
       let compUrl = ""
       let litUrl = ""
       let chargeUrl = ""
       let regUrl = ""
 
-      // Use verified Dataset IDs (2024)
-      // HPD Violations: wvxf-dwi5
-      // 311 Complaints: erm2-nwe9
-      // Litigation: 59kj-x8nc
-      // Registration: tesw-yqqr
-      // HPD Fee Charges: cp6j-7bjj
-
-      if (bin || bbl) {
+      if (currentBin || currentBbl) {
         // Precise Lookup
-        const binFilter = bin ? `&bin=${bin}` : ''
-        const bblFilter = bbl ? `&bbl=${bbl}` : ''
+        const binFilter = currentBin ? `&bin=${currentBin}` : ''
+        const bblFilter = currentBbl ? `&bbl=${currentBbl}` : ''
 
-        // Violations (BIN preferred)
-        vioUrl = `https://data.cityofnewyork.us/resource/wvxf-dwi5.json?$limit=5&$order=novid DESC${binFilter}`
-
-        // Complaints (BBL preferred)
-        compUrl = `https://data.cityofnewyork.us/resource/erm2-nwe9.json?$limit=5&$order=created_date DESC${bblFilter}`
-
-        // Litigation (BIN)
-        litUrl = `https://data.cityofnewyork.us/resource/59kj-x8nc.json?$limit=5&$order=caseopendate DESC${binFilter}`
-
-        // Registration (BIN)
+        // HPD Violations dataset (wvxf-dwi5) supports BIN but NOT BBL directly
+        // Registrations (tesw-yqqr) supports BIN
         regUrl = `https://data.cityofnewyork.us/resource/tesw-yqqr.json?$limit=1&$order=lastregistrationdate DESC${binFilter}`
-
-        // Charges (BBL preferred)
-        chargeUrl = `https://data.cityofnewyork.us/resource/cp6j-7bjj.json?$limit=5&$order=activitydate DESC${bblFilter}`
+        // Fee Charges (cp6j-7bjj) - some fields like bbl require $where for filtering
+        const chargeFilter = currentBbl ? `&$where=bbl='${currentBbl}'` : binFilter ? `&$where=bin='${currentBin}'` : ''
+        chargeUrl = `https://data.cityofnewyork.us/resource/cp6j-7bjj.json?$limit=5&$order=feeissueddate DESC${chargeFilter}`
 
       } else {
         // Fallback to Address (Fuzzy)
@@ -1291,33 +1493,54 @@ export default function APP_ROOT() {
         compUrl = `https://data.cityofnewyork.us/resource/erm2-nwe9.json?$limit=5&$order=created_date DESC&incident_address=${encodeURIComponent(houseNum + ' ' + streetName)}`
         litUrl = `https://data.cityofnewyork.us/resource/59kj-x8nc.json?$limit=5&$order=caseopendate DESC&housenumber=${houseNum}&streetname=${encodedStreet}`
         regUrl = `https://data.cityofnewyork.us/resource/tesw-yqqr.json?$limit=1&$order=lastregistrationdate DESC&housenumber=${houseNum}&streetname=${encodedStreet}`
-        chargeUrl = `https://data.cityofnewyork.us/resource/cp6j-7bjj.json?$limit=5&$order=activitydate DESC&housenumber=${houseNum}&streetname=${encodedStreet}`
+        chargeUrl = `https://data.cityofnewyork.us/resource/cp6j-7bjj.json?$limit=5&$order=feeissueddate DESC&housenumber=${houseNum}&streetname=${encodedStreet}`
       }
 
-      const [vioRes, compRes, litRes, regRes, chargeRes] = await Promise.all([
-        fetch(vioUrl).catch(e => ({ json: () => [] })),
-        fetch(compUrl).catch(e => ({ json: () => [] })),
-        fetch(litUrl).catch(e => ({ json: () => [] })),
-        fetch(regUrl).catch(e => ({ json: () => [] })),
-        fetch(chargeUrl).catch(e => ({ json: () => [] }))
+      console.log("URLs:", { vioUrl, compUrl, chargeUrl })
+
+      const results = await Promise.all([
+        fetch(vioUrl).then(r => r.json()).catch(() => []),
+        fetch(compUrl).then(r => r.json()).catch(() => []),
+        fetch(litUrl).then(r => r.json()).catch(() => []),
+        fetch(regUrl).then(r => r.json()).catch(() => []),
+        fetch(chargeUrl).then(r => r.json()).catch(() => [])
       ])
 
-      const [vios, comps, lits, regs, charges] = await Promise.all([
-        vioRes.json ? vioRes.json() : [],
-        compRes.json ? compRes.json() : [],
-        litRes.json ? litRes.json() : [],
-        regRes.json ? regRes.json() : [],
-        chargeRes.json ? chargeRes.json() : []
-      ])
+      const [rawVios, comps, lits, regs, charges] = results;
+
+      // Map snake_case to frontend expected format if they differ significantly
+      const vios = Array.isArray(rawVios) ? rawVios.map((v: any) => ({
+        ...v,
+        novdescription: v.nov_description || v.novdescription,
+        novissueddate: v.nov_issued_date || v.novissueddate,
+        violationid: v.violationid || v.nov_id
+      })) : []
 
       setPropCityData({
-        bin: bin || vios[0]?.bin || "N/A", // Ensure BIN is captured
-        violations: vios || [],
-        complaints: comps || [],
-        litigations: lits || [],
-        registrations: regs || [{ registrationid: "N/A", class: "N/A" }],
-        charges: charges || []
+        bin: currentBin || vios[0]?.bin || "N/A",
+        violations: vios,
+        complaints: Array.isArray(comps) ? comps : [],
+        litigations: Array.isArray(lits) ? lits : [],
+        registrations: Array.isArray(regs) ? regs : [{ registrationid: "N/A", class: "N/A" }],
+        charges: Array.isArray(charges) ? charges : []
       })
+
+      // Sync data back to Supabase if we found new info
+      if (manageProp) {
+        const updatePayload: any = { violations: vios.length }
+        if (!manageProp.bin && currentBin) updatePayload.bin = currentBin
+        if (!manageProp.bbl && currentBbl) updatePayload.bbl = currentBbl
+
+        await supabase
+          .from('properties')
+          .update(updatePayload)
+          .eq('id', manageProp.id)
+
+        // Sync local state so UI updates immediately (e.g. Autopilot tab can check .bin)
+        const updatedProp = { ...manageProp, ...updatePayload }
+        setManageProp(updatedProp)
+        setProperties(prev => prev.map(p => p.id === manageProp.id ? updatedProp : p))
+      }
 
     } catch (e) {
       console.error("City Data Fetch Error", e)
@@ -1350,6 +1573,23 @@ export default function APP_ROOT() {
       }
       fetchOath()
 
+      // Fetch existing AI Autopilot Roadmaps
+      const fetchAutopilot = async () => {
+        try {
+          const auth = await supabase.auth.getSession()
+          const res = await fetch(`/api/compliance-autopilot?property_id=${manageProp.id}`, {
+            headers: { Authorization: `Bearer ${auth.data.session?.access_token}` }
+          })
+          const json = await res.json()
+          if (json.data) {
+            setComplianceResolutions(json.data)
+          }
+        } catch (e) {
+          console.error("Error fetching Autopilot data:", e)
+        }
+      }
+      fetchAutopilot()
+
       // Fetch LL84 Benchmarking
       const fetchLl84 = async () => {
         if (!manageProp.bbl) {
@@ -1377,9 +1617,10 @@ export default function APP_ROOT() {
       setPropCityData(null)
       setOathHearings([])
       setLl84Data(null)
+      setComplianceResolutions([])
       setPropTab('details')
     }
-  }, [manageProp])
+  }, [manageProp?.id])
 
   const [selectedRequest, setSelectedRequest] = useState<TenantRequest | null>(null) // State for managing request details
 
@@ -1490,7 +1731,7 @@ export default function APP_ROOT() {
     // OR we relies on the effect.
     // If we rely on effect, we must ensure tempProp has the bin.
   }
-  const [newCon, setNewCon] = useState({ name: '', category: 'General', phone: '', email: '', company: '', location: '', image: '' })
+  const [newCon, setNewCon] = useState({ name: '', category: 'General', phone: '', email: '', company_name: '', location: '', image: '' })
 
   // Filters
   const [filterCategory, setFilterCategory] = useState("All")
@@ -1508,7 +1749,7 @@ export default function APP_ROOT() {
 
   // LOGIC: Force Add Manager (Admin Only)
   const [showForceAddManager, setShowForceAddManager] = useState(false)
-  const [forceManagerData, setForceManagerData] = useState({ name: '', email: '', company: '' })
+  const [forceManagerData, setForceManagerData] = useState({ name: '', email: '', company_name: '' })
   const [forceManagerLoading, setForceManagerLoading] = useState(false)
   const [newCompanyPassword, setNewCompanyPassword] = useState<string | null>(null)
   const [isCopied, setIsCopied] = useState(false)
@@ -1536,7 +1777,7 @@ export default function APP_ROOT() {
             role: 'manager',
             status: 'Active', // Auto-approve
             full_name: forceManagerData.name,
-            company_name: forceManagerData.company
+            company_name: forceManagerData.company_name
           }
         }
       })
@@ -1561,11 +1802,12 @@ export default function APP_ROOT() {
           role: 'manager',
           status: 'Active',
           full_name: forceManagerData.name,
+          company_name: forceManagerData.company_name,
           company_code: generatedCode || null,
           created_at: new Date().toISOString()
         }])
         setShowForceAddManager(false)
-        setForceManagerData({ name: '', email: '', company: '' })
+        setForceManagerData({ name: '', email: '', company_name: '' })
         setNewCompanyPassword(tempPassword)
       }
     } catch (e: any) {
@@ -1588,8 +1830,8 @@ export default function APP_ROOT() {
 
       const payload = {
         name: newCon.name,
+        company_name: newCon.company_name,
         category: newCon.category,
-        // type: removed for DB compatibility
         phone: newCon.phone,
         email: newCon.email,
         status: 'Active',
@@ -1619,7 +1861,7 @@ export default function APP_ROOT() {
       }
 
       setShowAddContractor(false)
-      setNewCon({ name: '', category: 'General', phone: '', email: '', company: '', location: '', image: '' })
+      setNewCon({ name: '', category: 'General', phone: '', email: '', company_name: '', location: '', image: '' })
     } catch (e) {
       console.error("Critical Error Adding Contractor:", e)
       showToast("System Error", 'info')
@@ -1632,10 +1874,10 @@ export default function APP_ROOT() {
 
     const payload = {
       name: newCon.name,
+      company_name: newCon.company_name,
       category: newCon.category,
       phone: newCon.phone,
       email: newCon.email,
-      company: newCon.company,
       location: newCon.location,
       image: newCon.image
     }
@@ -1653,21 +1895,27 @@ export default function APP_ROOT() {
     }
     setShowAddContractor(false)
     setEditingContractor(null)
-    setNewCon({ name: '', category: 'General', phone: '', email: '', company: '', location: '', image: '' })
+    setNewCon({ name: '', category: 'General', phone: '', email: '', company_name: '', location: '', image: '' })
   }
 
   // LOGIC: Delete Contractor
   const handleDeleteContractor = async (id: number) => {
-    if (!confirm("Are you sure you want to delete this contractor?")) return
-    const { error } = await supabase.from('contractors').delete().eq('id', id)
-    if (error) {
-      showToast("Error deleting contractor", 'info')
-    } else {
-      setContractors(contractors.filter(c => c.id !== id))
-      showToast("Contractor deleted!")
-    }
+    setDeleteConfirmTitle("Remove Contractor")
+    const contractor = contractors.find(c => c.id === id)
+    setDeleteConfirmMessage(`Are you sure you want to remove ${contractor?.name || 'this contractor'} from the network?`)
+    setOnConfirmDelete(() => async () => {
+      const { error } = await supabase.from('contractors').delete().eq('id', id)
+      if (!error) {
+        setContractors(contractors.filter(c => c.id !== id))
+        showToast("Contractor removed.")
+        setDeleteConfirmOpen(false)
+        setDeleteConfirmText("")
+      } else {
+        showToast("Error removing contractor", 'error')
+      }
+    })
+    setDeleteConfirmOpen(true)
   }
-
   // Toast
   const [toast, setToast] = useState<{ msg: string, type: 'success' | 'info' | 'error' } | null>(null)
   const showToast = (msg: string, type: 'success' | 'info' | 'error' = 'success') => {
@@ -1764,9 +2012,27 @@ export default function APP_ROOT() {
     }
 
     // Default location (NYC) if search failed
-    const lat = selectedLocation?.lat || 40.7128 + (Math.random() - 0.5) * 0.05
-    const lng = selectedLocation?.lng || -74.0060 + (Math.random() - 0.5) * 0.05
+    let lat = selectedLocation?.lat || 40.7128 + (Math.random() - 0.5) * 0.05
+    let lng = selectedLocation?.lng || -74.0060 + (Math.random() - 0.5) * 0.05
+    let bin = selectedLocation?.bin
+    let bbl = selectedLocation?.bbl
 
+    // Force BIN/BBL lookup if missing (e.g. user just typed text but didn't click result)
+    if (!bin && newPropAddr) {
+      try {
+        const res = await fetch(`https://geosearch.planninglabs.nyc/v2/search?text=${encodeURIComponent(newPropAddr)}`)
+        const data = await res.json()
+        if (data.features && data.features.length > 0) {
+          const f = data.features[0]
+          lat = f.geometry.coordinates[1]
+          lng = f.geometry.coordinates[0]
+          bin = f.properties?.addendum?.pad?.bin || f.properties?.pad_bin || f.properties?.bin || ""
+          bbl = f.properties?.addendum?.pad?.bbl || f.properties?.pad_bbl || f.properties?.bbl || ""
+        }
+      } catch (e) {
+        console.error("Forced GeoSearch Error:", e)
+      }
+    }
     const user = (await supabase.auth.getUser()).data.user
     if (!user) {
       showToast("Please log in again.", 'info')
@@ -1806,9 +2072,8 @@ export default function APP_ROOT() {
         ? `https://maps.googleapis.com/maps/api/streetview?size=400x300&location=${lat},${lng}&key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}`
         : `https://images.unsplash.com/photo-1496442226666-8d4d0e62e6e9?auto=format&fit=crop&q=80&w=400&h=300`,
       manager_id: user.id,
-      // Temporarily excluding bin and bbl due to missing columns in DB:
-      // bin: selectedLocation?.bin || "",
-      // bbl: selectedLocation?.bbl || ""
+      bin: bin || "",
+      bbl: bbl || ""
     }
 
     // Only attach verification_document_url if we actually uploaded one (might still fail if column is missing completely, but this is the correct implementation)
@@ -1831,7 +2096,25 @@ export default function APP_ROOT() {
       setNewPropAddr("")
       setSearchResults([])
       setSelectedLocation(null)
-      setShowAddProperty(false)
+    }
+  }
+
+  // --- DELETE PROPERTY HANDLER ---
+  const handleDeleteProperty = async (propId: number) => {
+    setIsDeletingProperty(true)
+    try {
+      const { error } = await supabase.rpc('delete_property', { target_id: propId })
+      if (error) throw error
+
+      setProperties(prev => prev.filter(p => p.id !== propId))
+      setManageProp(null)
+      setDeleteConfirmOpen(false)
+      showToast("Property and all associated data deleted successfully.")
+    } catch (e: any) {
+      console.error("Delete Property Error:", e)
+      showToast(`Error: ${e.message || 'Failed to delete property'}`, 'error')
+    } finally {
+      setIsDeletingProperty(false)
     }
   }
 
@@ -1874,6 +2157,64 @@ export default function APP_ROOT() {
           setSelectedTier("")
         }}
       />
+
+      {/* GLOBAL NOTIFICATIONS */}
+      <AnimatePresence>{toast && (
+        <motion.div initial={{ opacity: 0, y: -50 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="fixed top-6 right-6 z-[10000] bg-slate-800/40 border border-slate-700/50 text-white px-4 py-3 rounded-lg shadow-xl flex items-center gap-3">
+          <div className="w-2 h-2 rounded-full bg-emerald-500"></div>{toast.msg}
+        </motion.div>
+      )}</AnimatePresence>
+
+      {/* GLOBAL DELETE CONFIRMATION MODAL */}
+      <AnimatePresence>
+        {deleteConfirmOpen && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[10000] bg-black/90 backdrop-blur-md flex items-center justify-center p-4">
+            <div className="bg-slate-900/40 backdrop-blur-md border border-slate-700/50 rounded-2xl w-full max-w-sm shadow-[0_0_50px_rgba(0,0,0,0.8)] overflow-hidden p-6 space-y-6">
+              <div className="text-center space-y-2">
+                <div className="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <ShieldAlert className="w-8 h-8 text-red-500" />
+                </div>
+                <h3 className="text-xl font-bold text-white">{deleteConfirmTitle}</h3>
+                <p className="text-sm text-slate-400">{deleteConfirmMessage}</p>
+              </div>
+
+              <div className="space-y-4">
+                <div className="text-xs text-center text-slate-500 uppercase font-bold tracking-widest">Type <span className="text-red-400">DELETE</span> to confirm</div>
+                <Input
+                  value={deleteConfirmText}
+                  onChange={(e) => setDeleteConfirmText(e.target.value)}
+                  placeholder="Type DELETE here..."
+                  className="bg-slate-950 border-slate-700/50 text-white text-center font-bold tracking-widest uppercase h-12 outline-none focus:ring-1 focus:ring-red-500"
+                />
+              </div>
+
+              <div className="flex gap-3">
+                <Button
+                  variant="ghost"
+                  className="flex-1 text-slate-400 hover:text-white"
+                  onClick={() => {
+                    setDeleteConfirmOpen(false)
+                    setDeleteConfirmText("")
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  className="flex-1 bg-red-600 hover:bg-red-500 text-white font-bold"
+                  disabled={deleteConfirmText !== "DELETE" || isDeletingProperty}
+                  onClick={async () => {
+                    if (onConfirmDelete) {
+                      await onConfirmDelete()
+                    }
+                  }}
+                >
+                  {isDeletingProperty ? <Activity className="w-4 h-4 animate-spin" /> : "Delete Forever"}
+                </Button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </>
   )
   if (userRole === "tenant") return <TenantDashboard
@@ -1921,7 +2262,7 @@ export default function APP_ROOT() {
               { id: 'admin_managers', icon: Building2, label: 'Management Cos' },
               { id: 'admin_tenants', icon: Users, label: 'Tenants' },
               { id: 'admin_subadmins', icon: ShieldCheck, label: 'Sub-Admins' },
-              { id: 'admin_pro', icon: Wrench, label: 'Pro Network' },
+              { id: 'admin_pro', icon: Wrench, label: 'Professional Network' },
               { id: 'admin_settings', icon: Settings, label: 'System Settings' }
             ].map(i => (
               <button key={i.id} onClick={() => setActiveTab(i.id)} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${activeTab === i.id ? 'bg-purple-500/20 text-purple-400' : 'hover:bg-slate-800/40 text-slate-400'}`}>
@@ -2168,16 +2509,21 @@ export default function APP_ROOT() {
                             if (activeTab === 'admin_subadmins') return u.role === 'admin';
                             return false;
                           }).map(u => (
-                            <tr key={u.id} className="hover:bg-slate-800/40/50 transition-colors">
+                            <tr key={u.id} className="hover:bg-slate-800/40 transition-colors">
                               {activeTab === 'admin_managers' ? (
                                 <>
-                                  <td className="p-4 font-medium text-white flex items-center">
-                                    {u.full_name || u.id.slice(0, 8)}
-                                    {u.company_code && (
-                                      <span className="ml-2 px-2 py-0.5 bg-indigo-500/20 text-indigo-300 text-xs font-mono rounded-md border border-indigo-500/30">
-                                        {u.company_code}
-                                      </span>
-                                    )}
+                                  <td className="p-4">
+                                    <div className="flex flex-col">
+                                      <div className="font-medium text-white">{u.full_name || u.id.slice(0, 8)}</div>
+                                      {u.company_name && <div className="text-xs text-slate-500 font-normal">{u.company_name}</div>}
+                                      {u.company_code && (
+                                        <div className="mt-1">
+                                          <span className="px-2 py-0.5 bg-indigo-500/20 text-indigo-300 text-[10px] font-mono rounded-md border border-indigo-500/30">
+                                            {u.company_code}
+                                          </span>
+                                        </div>
+                                      )}
+                                    </div>
                                   </td>
                                   <td className="p-4">{u.email}</td>
                                   <td className="p-4">
@@ -2249,7 +2595,7 @@ export default function APP_ROOT() {
                                       <Lock className="w-4 h-4" />
                                     </Button>
                                     <Button size="sm" variant="outline" className="border-slate-700/50 text-sky-400 hover:text-white hover:bg-sky-500/10 mr-2" onClick={() => {
-                                      setEditingCompanyData({ id: u.id, name: u.full_name || '', email: u.email, tier: u.membership_tier || 'Free' });
+                                      setEditingCompanyData({ id: u.id, name: u.full_name || '', company_name: u.company_name || '', email: u.email, tier: u.membership_tier || 'Free' });
                                     }}>Edit</Button>
                                   </>
                                 )}
@@ -2269,12 +2615,26 @@ export default function APP_ROOT() {
                                     setUsers(users.map(user => user.id === u.id ? { ...user, status: 'Suspended' } : user));
                                   }}>Suspend</Button>
                                 )}
-                                <Button size="icon" variant="ghost" className="text-slate-500 hover:text-red-500 hover:bg-red-500/10 ml-2" onClick={async () => {
-                                  if (confirm("Are you sure you want to PERMANENTLY delete this user?")) {
+                                <Button size="icon" variant="ghost" className="text-slate-500 hover:text-red-500 hover:bg-red-500/10 ml-2" onClick={() => {
+                                  setDeleteConfirmTitle("Delete User Account")
+                                  setDeleteConfirmMessage(`Are you sure you want to PERMANENTLY delete ${u.full_name || u.email}? This will also remove all their associated properties, contractors, and requests.`)
+                                  setOnConfirmDelete(() => async () => {
                                     const { error } = await supabase.rpc('delete_user', { target_id: u.id });
-                                    if (error) console.error(error);
-                                    else setUsers(users.filter(user => user.id !== u.id));
-                                  }
+                                    if (error) {
+                                      console.error("Delete Error Full Details:", error);
+                                      showToast(`Error: ${error.message || 'Unknown error'}`, 'error');
+                                    } else {
+                                      setUsers(users.filter(user => user.id !== u.id));
+                                      setProperties(properties.filter(p => p.manager_id !== u.id));
+                                      setContractors(contractors.filter(c => (c as any).manager_id !== u.id));
+                                      const managerPropertyIds = properties.filter(p => p.manager_id === u.id).map(p => p.id);
+                                      setRequests(requests.filter(req => !managerPropertyIds.includes(req.property_id) && req.tenant_id !== u.id));
+                                      showToast("User and all associated data deleted successfully.");
+                                      setDeleteConfirmOpen(false)
+                                      setDeleteConfirmText("")
+                                    }
+                                  })
+                                  setDeleteConfirmOpen(true)
                                 }}><Trash2 className="w-4 h-4" /></Button>
                               </td>
                             </tr>
@@ -2292,7 +2652,7 @@ export default function APP_ROOT() {
                           <div className="space-y-3">
                             <Input placeholder="Manager Name" value={forceManagerData.name} onChange={e => setForceManagerData({ ...forceManagerData, name: e.target.value })} className="bg-slate-800/40 border-slate-700/50 text-white" />
                             <Input placeholder="Email Address" type="email" value={forceManagerData.email} onChange={e => setForceManagerData({ ...forceManagerData, email: e.target.value.trim() })} className="bg-slate-800/40 border-slate-700/50 text-white" />
-                            <Input placeholder="Company Name" value={forceManagerData.company} onChange={e => setForceManagerData({ ...forceManagerData, company: e.target.value })} className="bg-slate-800/40 border-slate-700/50 text-white" />
+                            <Input placeholder="Company Name" value={forceManagerData.company_name} onChange={e => setForceManagerData({ ...forceManagerData, company_name: e.target.value })} className="bg-slate-800/40 border-slate-700/50 text-white" />
                             <div className="text-xs text-amber-400">Note: Default password will be <b>ChangeMe123!</b></div>
                           </div>
                           <div className="flex justify-end gap-2 mt-4">
@@ -2349,8 +2709,12 @@ export default function APP_ROOT() {
                           <h3 className="text-xl font-bold text-white mb-4">Edit Management Company</h3>
                           <div className="space-y-3">
                             <div>
-                              <label className="text-xs text-slate-400 mb-1 block">Company / Manager Name</label>
-                              <Input placeholder="Company Name" value={editingCompanyData.name} onChange={e => setEditingCompanyData({ ...editingCompanyData, name: e.target.value })} className="bg-slate-800/40 border-slate-700/50 text-white" />
+                              <label className="text-xs text-slate-400 mb-1 block">Manager Name</label>
+                              <Input placeholder="Manager Name" value={editingCompanyData.name} onChange={e => setEditingCompanyData({ ...editingCompanyData, name: e.target.value })} className="bg-slate-800/40 border-slate-700/50 text-white" />
+                            </div>
+                            <div>
+                              <label className="text-xs text-slate-400 mb-1 block">Company Name</label>
+                              <Input placeholder="Company Name" value={editingCompanyData.company_name} onChange={e => setEditingCompanyData({ ...editingCompanyData, company_name: e.target.value })} className="bg-slate-800/40 border-slate-700/50 text-white" />
                             </div>
                             <div>
                               <label className="text-xs text-slate-400 mb-1 block">Email (Cannot be changed directly)</label>
@@ -2376,11 +2740,12 @@ export default function APP_ROOT() {
                               const { error } = await supabase.rpc('update_company_profile', {
                                 target_id: editingCompanyData.id,
                                 new_name: editingCompanyData.name,
+                                new_company_name: editingCompanyData.company_name,
                                 new_tier: editingCompanyData.tier
                               });
 
                               if (!error) {
-                                setUsers(users.map(u => u.id === editingCompanyData.id ? { ...u, full_name: editingCompanyData.name, membership_tier: editingCompanyData.tier } : u));
+                                setUsers(users.map(u => u.id === editingCompanyData.id ? { ...u, full_name: editingCompanyData.name, company_name: editingCompanyData.company_name, membership_tier: editingCompanyData.tier } : u));
                                 showToast("Company details updated!");
                                 setEditingCompanyData(null);
                               } else {
@@ -2458,77 +2823,82 @@ export default function APP_ROOT() {
                 </div>
               )
             }
-            {/* PRO NETWORK TAB */}
-            {
-              activeTab === 'admin_pro' && (
-                <div className="space-y-6">
-                  <div className="flex justify-between items-center mb-6">
-                    <div><h2 className="text-2xl font-bold text-white">Pro Network Management</h2><p className="text-slate-400">Manage contractors, categories, and verification status.</p></div>
-                    <Button className="bg-indigo-400 hover:bg-purple-700 text-white" onClick={() => setShowAddContractor(true)}><Plus className="w-4 h-4 mr-2" /> Add New Contractor</Button>
+            {/* CONTRACTOR NETWORK TAB */}
+            {activeTab === 'contractors' && (
+              <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <div className="flex justify-between items-center mb-6">
+                  <div>
+                    <h2 className="text-2xl font-bold text-white flex items-center gap-2"><HardHat className="w-6 h-6 text-sky-400" /> Professional Contractor Network</h2>
+                    <p className="text-slate-400">Verified specialists for NYC compliance, repairs, and inspections.</p>
                   </div>
+                  {userRole === 'admin' && (
+                    <Button className="bg-sky-500 hover:bg-sky-400 text-white" onClick={() => setShowAddContractor(true)}><Plus className="w-4 h-4 mr-2" /> Add New Contractor</Button>
+                  )}
+                </div>
 
-                  {/* FILTERS */}
-                  <div className="flex gap-4 bg-slate-900/40 backdrop-blur-md/50 p-3 rounded-lg border border-slate-700/50">
-                    <div className="flex items-center gap-2">
-                      <Filter className="w-4 h-4 text-slate-400" />
-                      <span className="text-sm font-medium text-gray-300">Filters:</span>
+                {/* FILTERS */}
+                <div className="flex flex-wrap gap-4 bg-slate-900/40 backdrop-blur-md/50 p-4 rounded-xl border border-slate-700/50">
+                  <div className="flex items-center gap-2 pr-4 border-r border-slate-800">
+                    <Filter className="w-4 h-4 text-slate-400" />
+                    <span className="text-sm font-medium text-gray-300">Filters:</span>
+                  </div>
+                  <select className="bg-slate-800/40 border-slate-700/50 text-white text-sm rounded-md px-3 py-1 outline-none focus:ring-1 focus:ring-sky-500" value={filterCategory} onChange={e => setFilterCategory(e.target.value)}>
+                    <option value="All">All Categories</option>
+                    {['Plumbing', 'Electrical', 'HVAC', 'Construction', 'Cleaning', 'Exterminator', 'Handyman', 'Security', 'General'].map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                  <select className="bg-slate-800/40 border-slate-700/50 text-white text-sm rounded-md px-3 py-1 outline-none focus:ring-1 focus:ring-sky-500" value={filterLocation} onChange={e => setFilterLocation(e.target.value)}>
+                    <option value="All">All Boroughs</option>
+                    {['Manhattan', 'Brooklyn', 'Queens', 'Bronx', 'Staten Island'].map(l => <option key={l} value={l}>{l}</option>)}
+                  </select>
+                  <Button variant="ghost" size="sm" className="text-xs text-slate-500 ml-auto" onClick={() => { setFilterCategory("All"); setFilterLocation("All"); }}>Reset Filters</Button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                  {filteredContractors.length === 0 ? (
+                    <div className="col-span-full text-center py-20 border border-dashed border-slate-800 rounded-2xl">
+                      <Users className="w-12 h-12 text-slate-700 mx-auto mb-3" />
+                      <h3 className="text-lg font-bold text-slate-500">No matching contractors found</h3>
                     </div>
-                    <select className="bg-slate-800/40 border-slate-700/50 text-white text-sm rounded-md px-3 py-1" value={filterCategory} onChange={e => setFilterCategory(e.target.value)}>
-                      <option value="All">All Categories</option>
-                      <option value="Cleaning">Cleaning</option>
-                      <option value="Construction">Construction</option>
-                      <option value="Plumbing">Plumbing</option>
-                      <option value="Exterminator">Exterminator</option>
-                      <option value="Handyman">Handyman</option>
-                      <option value="Electrical">Electrical</option>
-                      <option value="HVAC">HVAC</option>
-                      <option value="Security">Security</option>
-                      <option value="General">General</option>
-                    </select>
-                    <select className="bg-slate-800/40 border-slate-700/50 text-white text-sm rounded-md px-3 py-1" value={filterLocation} onChange={e => setFilterLocation(e.target.value)}>
-                      <option value="All">All Locations</option>
-                      <option value="Manhattan">Manhattan</option>
-                      <option value="Brooklyn">Brooklyn</option>
-                      <option value="Queens">Queens</option>
-                      <option value="Bronx">Bronx</option>
-                      <option value="Staten Island">Staten Island</option>
-                      <option value="NJ">New Jersey</option>
-                    </select>
-                    <Button variant="ghost" size="sm" className="text-xs text-slate-500 ml-auto" onClick={() => { setFilterCategory("All"); setFilterLocation("All"); }}>Reset</Button>
-                  </div>
-
-                  <div className="grid grid-cols-1 gap-4">
-                    {filteredContractors.length === 0 ? <div className="text-center text-slate-500 py-8">No contractors found matching filters.</div> : filteredContractors.map(c => (
-                      <div key={c.id} className="bg-slate-900/40 backdrop-blur-md border border-slate-700/50 p-4 rounded-lg flex items-center justify-between">
-                        <div className="flex items-center gap-4">
-                          {c.image ? (
-                            <img src={c.image} alt={c.name} className="w-12 h-12 rounded-lg object-cover bg-slate-800/40" />
-                          ) : (
-                            <div className="w-12 h-12 bg-slate-800/40 rounded-lg flex items-center justify-center text-xl font-bold text-slate-500">{c.name[0]}</div>
-                          )}
-                          <div>
-                            <div className="font-bold text-white text-lg">{c.name}</div>
-                            {c.company && <div className="text-sm text-slate-400 font-medium">{c.company}</div>}
-                            <div className="text-purple-400 text-sm flex items-center gap-2">
-                              <span>{c.category || c.type}</span>
-                              {c.location && <span className="bg-slate-800/40 text-gray-300 px-1.5 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider">{c.location}</span>}
-                              <span className="text-emerald-500 flex items-center gap-1">• Verified <CheckCircle className="w-3 h-3" /></span>
+                  ) : filteredContractors.map(c => (
+                    <Card key={c.id} className="bg-slate-900/40 backdrop-blur-md border border-slate-700/50 group hover:border-sky-500/30 transition-all cursor-pointer overflow-hidden">
+                      <CardContent className="p-0">
+                        <div className="p-5 flex gap-4 items-start border-b border-slate-800/50">
+                          <div className="w-14 h-14 bg-slate-800/60 rounded-xl overflow-hidden flex items-center justify-center shrink-0 border border-slate-700">
+                            {c.image ? <img src={c.image} className="w-full h-full object-cover" /> : <HardHat className="w-6 h-6 text-slate-600" />}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <h4 className="font-bold text-white text-lg truncate group-hover:text-sky-400 transition-colors">{c.name}</h4>
+                            <div className="text-xs text-purple-400 font-bold uppercase tracking-widest mt-0.5">{c.category || c.type}</div>
+                            <div className="flex items-center gap-1.5 mt-2">
+                              <Badge className="bg-emerald-500/10 text-emerald-400 border-0 text-[10px] px-1.5 h-5 flex items-center gap-1"><CheckCircle className="w-3 h-3" /> Verified</Badge>
+                              {c.location && <Badge variant="outline" className="border-slate-700 text-slate-500 text-[10px] px-1.5 h-5">{c.location}</Badge>}
                             </div>
                           </div>
                         </div>
-                        <div className="flex gap-2">
-                          <Button variant="outline" size="sm" className="border-slate-700/50 text-gray-300 hover:text-white" onClick={() => {
-                            setEditingContractor(c)
-                            setNewCon({ name: c.name, company: c.company || '', location: c.location || '', category: c.category || c.type, phone: c.phone || '', email: c.email || '', image: c.image || '' })
-                            setShowAddContractor(true)
-                          }}>Edit Profile</Button>
-                          <Button variant="outline" size="sm" className="border-slate-700/50 text-red-400 hover:text-red-300 hover:bg-red-900/20" onClick={() => handleDeleteContractor(c.id)}>Delete</Button>
+                        <div className="p-5 bg-black/10 flex items-center justify-between">
+                          <div className="flex gap-1 items-center">
+                            <Sparkles className="w-3 h-3 text-amber-500" />
+                            <span className="text-xs font-bold text-white">4.8</span>
+                            <span className="text-[10px] text-slate-500">(24 Reviews)</span>
+                          </div>
+                          <div className="flex gap-2">
+                            {userRole === 'admin' && (
+                              <Button size="icon" variant="ghost" className="h-8 w-8 text-slate-500 hover:text-white" onClick={(e) => {
+                                e.stopPropagation()
+                                setEditingContractor(c)
+                                setNewCon({ name: c.name, company_name: c.company_name || '', location: c.location || '', category: c.category || c.type, phone: c.phone || '', email: c.email || '', image: c.image || '' })
+                                setShowAddContractor(true)
+                              }}><Settings className="w-4 h-4" /></Button>
+                            )}
+                            <Button size="sm" className="bg-sky-500 hover:bg-sky-400 text-white h-8 text-xs font-bold">Contact Pro</Button>
+                          </div>
                         </div>
-                      </div>
-                    ))}
-                  </div>
+                      </CardContent>
+                    </Card>
+                  ))}
                 </div>
-              )
+              </div>
+            )
             }
 
             {
@@ -2558,7 +2928,7 @@ export default function APP_ROOT() {
                 </div>
                 <div>
                   <label className="text-xs text-slate-400">Company Name</label>
-                  <Input placeholder="Company Name (Optional)" value={newCon.company} onChange={e => setNewCon({ ...newCon, company: e.target.value })} className="bg-slate-800/40 border-slate-600/50 text-white" />
+                  <Input placeholder="Company Name (Optional)" value={newCon.company_name} onChange={e => setNewCon({ ...newCon, company_name: e.target.value })} className="bg-slate-800/40 border-slate-600/50 text-white" />
                 </div>
                 <div>
                   <label className="text-xs text-slate-400">Category</label>
@@ -2595,7 +2965,7 @@ export default function APP_ROOT() {
                 </div>
               </div>
               <div className="flex justify-end gap-2 pt-4">
-                <Button variant="ghost" onClick={() => { setShowAddContractor(false); setEditingContractor(null); setNewCon({ name: '', category: 'General', phone: '', email: '', company: '', location: '', image: '' }) }}>Cancel</Button>
+                <Button variant="ghost" onClick={() => { setShowAddContractor(false); setEditingContractor(null); setNewCon({ name: '', category: 'General', phone: '', email: '', company_name: '', location: '', image: '' }) }}>Cancel</Button>
                 <Button className="bg-indigo-400 text-white" onClick={editingContractor ? handleUpdateContractor : handleAddContractor} disabled={!newCon.name}>
                   {editingContractor ? 'Update Contractor' : 'Add Contractor'}
                 </Button>
@@ -2604,6 +2974,67 @@ export default function APP_ROOT() {
           </motion.div>
         )
         }</AnimatePresence >
+
+        {/* GLOBAL NOTIFICATIONS */}
+        < AnimatePresence > {toast && (
+          <motion.div initial={{ opacity: 0, y: -50 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="fixed top-6 right-6 z-[10000] bg-slate-800/40 border border-slate-700/50 text-white px-4 py-3 rounded-lg shadow-xl flex items-center gap-3">
+            <div className="w-2 h-2 rounded-full bg-emerald-500"></div>{toast.msg}
+          </motion.div>
+        )
+        }</AnimatePresence >
+
+        {/* GLOBAL DELETE CONFIRMATION MODAL */}
+        <AnimatePresence>
+          {
+            deleteConfirmOpen && (
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[10000] bg-black/90 backdrop-blur-md flex items-center justify-center p-4">
+                <div className="bg-slate-900/40 backdrop-blur-md border border-slate-700/50 rounded-2xl w-full max-w-sm shadow-[0_0_50px_rgba(0,0,0,0.8)] overflow-hidden p-6 space-y-6">
+                  <div className="text-center space-y-2">
+                    <div className="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <ShieldAlert className="w-8 h-8 text-red-500" />
+                    </div>
+                    <h3 className="text-xl font-bold text-white">{deleteConfirmTitle}</h3>
+                    <p className="text-sm text-slate-400">{deleteConfirmMessage}</p>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div className="text-xs text-center text-slate-500 uppercase font-bold tracking-widest">Type <span className="text-red-400">DELETE</span> to confirm</div>
+                    <Input
+                      value={deleteConfirmText}
+                      onChange={(e) => setDeleteConfirmText(e.target.value)}
+                      placeholder="Type DELETE here..."
+                      className="bg-slate-950 border-slate-700/50 text-white text-center font-bold tracking-widest uppercase h-12 outline-none focus:ring-1 focus:ring-red-500"
+                    />
+                  </div>
+
+                  <div className="flex gap-3">
+                    <Button
+                      variant="ghost"
+                      className="flex-1 text-slate-400 hover:text-white"
+                      onClick={() => {
+                        setDeleteConfirmOpen(false)
+                        setDeleteConfirmText("")
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      className="flex-1 bg-red-600 hover:bg-red-500 text-white font-bold"
+                      disabled={deleteConfirmText !== "DELETE" || isDeletingProperty}
+                      onClick={async () => {
+                        if (onConfirmDelete) {
+                          await onConfirmDelete()
+                        }
+                      }}
+                    >
+                      {isDeletingProperty ? <Activity className="w-4 h-4 animate-spin" /> : "Delete Forever"}
+                    </Button>
+                  </div>
+                </div>
+              </motion.div>
+            )
+          }
+        </AnimatePresence >
       </div >
     )
   }
@@ -2611,7 +3042,7 @@ export default function APP_ROOT() {
   return (
     <div className="flex h-screen bg-background text-foreground overflow-hidden font-sans">
       <AnimatePresence>{toast && (
-        <motion.div initial={{ opacity: 0, y: -50 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="fixed top-6 right-6 z-[100] bg-slate-800/40 border border-slate-700/50 text-white px-4 py-3 rounded-lg shadow-xl flex items-center gap-3">
+        <motion.div initial={{ opacity: 0, y: -50 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="fixed top-6 right-6 z-[10000] bg-slate-800/40 border border-slate-700/50 text-white px-4 py-3 rounded-lg shadow-xl flex items-center gap-3">
           <div className="w-2 h-2 rounded-full bg-emerald-500"></div>{toast.msg}
         </motion.div>
       )}</AnimatePresence>
@@ -2643,10 +3074,29 @@ export default function APP_ROOT() {
           </div>
         )}
 
-        <nav className="p-4 space-y-2 flex-1">
-          {[{ id: 'dashboard', icon: LayoutDashboard, label: 'Overview' }, { id: 'requests', icon: ClipboardList, label: 'Requests', badge: requests.filter(r => r.status === 'Pending').length }, { id: 'map', icon: MapIcon, label: 'Map' }, { id: 'properties', icon: Building2, label: 'Properties' }, { id: 'manager_tenants', icon: Users, label: 'Tenants' }, { id: 'calendar', icon: Calendar, label: 'Compliance Calendar' }, { id: 'll97', icon: Flame, label: 'LL97 Simulator' }, { id: 'contractors', icon: Users, label: 'Pro Network' }, { id: 'settings', icon: Settings, label: 'Settings' }].map(i => (
-            <button key={i.id} onClick={() => setActiveTab(i.id)} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${activeTab === i.id ? 'bg-primary/10 text-primary shadow-sm shadow-sky-400/10' : 'hover:bg-secondary text-slate-400 hover:text-white'}`}>
-              <i.icon className="w-5 h-5" /> {i.label} {i.badge ? <span className="ml-auto bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full shadow-lg shadow-red-500/40">{i.badge}</span> : null}
+        <nav className="p-4 space-y-2 flex-1 overflow-y-auto">
+          {[
+            { id: 'dashboard', icon: LayoutDashboard, label: 'Overview' },
+            { id: 'autopilot', icon: Sparkles, label: 'AI Autopilot', isPro: true },
+            { id: 'documents', icon: FileText, label: 'Document Vault', isPro: true },
+            { id: 'requests', icon: ClipboardList, label: 'Requests', badge: requests.filter(r => r.status === 'Pending').length },
+            { id: 'map', icon: MapIcon, label: 'Map' },
+            { id: 'properties', icon: Building2, label: 'Properties' },
+            { id: 'manager_tenants', icon: Users, label: 'Tenants' },
+            { id: 'calendar', icon: Calendar, label: 'Compliance Calendar' },
+            { id: 'll97', icon: Flame, label: 'LL97 Simulator' },
+            { id: 'contractors', icon: HardHat, label: 'Contractor Network' },
+            { id: 'settings', icon: Settings, label: 'Settings' }
+          ].map(i => (
+            <button
+              key={i.id}
+              onClick={() => setActiveTab(i.id)}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${activeTab === i.id ? 'bg-primary/10 text-primary shadow-sm shadow-sky-400/10' : 'hover:bg-secondary text-slate-400 hover:text-white'}`}
+            >
+              <i.icon className={`w-5 h-5 ${i.isPro ? 'text-purple-400' : ''}`} />
+              <span className="flex-1 text-left">{i.label}</span>
+              {i.isPro && <Sparkles className="w-3 h-3 text-purple-400 opacity-60" />}
+              {i.badge ? <span className="ml-auto bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full shadow-lg shadow-red-500/40">{i.badge}</span> : null}
             </button>
           ))}
         </nav>
@@ -2679,6 +3129,19 @@ export default function APP_ROOT() {
             {/* DASHBOARD */}
             {activeTab === 'dashboard' && (
               <div className="space-y-6">
+                {/* EXPIRY ALERT BANNER */}
+                {vaultDocuments.some(d => d.expires_at && (new Date(d.expires_at).getTime() - new Date().getTime()) < 30 * 24 * 60 * 60 * 1000) && (
+                  <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-xl flex items-center justify-between group">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-amber-500/20 flex items-center justify-center text-amber-500 font-bold">!</div>
+                      <div>
+                        <h4 className="font-bold text-amber-500">Document Expiration Warning</h4>
+                        <p className="text-xs text-slate-400">You have {vaultDocuments.filter(d => d.expires_at && (new Date(d.expires_at).getTime() - new Date().getTime()) < 30 * 24 * 60 * 60 * 1000).length} documents expiring in the next 30 days.</p>
+                      </div>
+                    </div>
+                    <Button size="sm" variant="outline" className="border-amber-500/30 text-amber-500 hover:bg-amber-500/10" onClick={() => { setActiveTab('documents'); setDocFilter('all'); }}>View Documents</Button>
+                  </motion.div>
+                )}
                 <div className="grid grid-cols-4 gap-6">
                   <Card className="bg-card/50">
                     <CardContent className="p-6">Properties
@@ -2748,77 +3211,409 @@ export default function APP_ROOT() {
                         <Lock className="w-3 h-3" />
                         Access Code: <span className="text-zinc-300 font-mono font-bold tracking-widest">{p.access_code || 'N/A'}</span>
                       </div>
-                      <Button className="w-full" variant="outline" onClick={() => setManageProp(p)}>Manage Details</Button>
+                      <div className="flex gap-2">
+                        <Button className="flex-1" variant="outline" onClick={() => setManageProp(p)}>Manage Details</Button>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="text-slate-500 hover:text-red-500 hover:bg-red-500/10 transition-colors"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setDeleteConfirmTitle("Delete Property")
+                            setDeleteConfirmMessage(`Are you sure you want to PERMANENTLY delete ${p.address}? All documents, requests, and city data history will be lost.`)
+                            setOnConfirmDelete(() => async () => {
+                              await handleDeleteProperty(p.id)
+                              setDeleteConfirmOpen(false)
+                              setDeleteConfirmText("")
+                            })
+                            setDeleteConfirmOpen(true)
+                          }}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
                     </CardContent>
                   </Card>
                 ))}
               </div>
             )}
 
-            {/* MANAGER TENANTS TAB */}
-            {activeTab === 'manager_tenants' && (
-              <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500 fade-in">
-                <div className="flex justify-between items-center bg-slate-900/50 p-6 rounded-2xl border border-slate-800/50 backdrop-blur-sm">
+            {/* AI COMPLIANCE AUTOPILOT */}
+            {activeTab === 'autopilot' && (
+              <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <div className="flex justify-between items-start">
                   <div>
-                    <h2 className="text-2xl font-bold tracking-tight text-white mb-1">Your Tenants</h2>
-                    <p className="text-slate-400">View and manage tenants registered to your properties.</p>
+                    <h2 className="text-2xl font-bold flex items-center gap-2 text-purple-400"><Sparkles className="w-6 h-6" /> AI Compliance Autopilot</h2>
+                    <p className="text-muted-foreground mt-1">Automated violation resolution paths, document generation, and contractor matching.</p>
+                  </div>
+                  {manageProp ? (
+                    <Button
+                      className="bg-purple-600 hover:bg-purple-500 text-white gap-2"
+                      disabled={isAnalyzingAutopilot}
+                      onClick={async () => {
+                        if (!manageProp.bin) {
+                          showToast("Property BIN missing for analysis.", "info")
+                          return
+                        }
+                        setIsAnalyzingAutopilot(true)
+                        try {
+                          // Fetch latest violations for this property first
+                          const resVio = await fetch(`/api/check_violations?bin=${manageProp.bin}`)
+                          const jsonVio = await resVio.json()
+                          const vios = jsonVio.violations || []
+
+                          if (vios.length === 0) {
+                            showToast("No open violations found to analyze.", "info")
+                            return
+                          }
+
+                          const auth = await supabase.auth.getSession()
+                          const res = await fetch('/api/compliance-autopilot', {
+                            method: 'POST',
+                            headers: {
+                              'Content-Type': 'application/json',
+                              Authorization: `Bearer ${auth.data.session?.access_token}`
+                            },
+                            body: JSON.stringify({ property_id: manageProp.id, violations: vios })
+                          })
+                          const json = await res.json()
+                          if (json.data) {
+                            setComplianceResolutions(json.data)
+                            showToast("AI Autopilot initialized!")
+                          } else {
+                            showToast(json.error || "Analysis failed.", "error")
+                          }
+                        } catch (e) {
+                          showToast("Error starting Autopilot.", "error")
+                        } finally {
+                          setIsAnalyzingAutopilot(false)
+                        }
+                      }}
+                    >
+                      {isAnalyzingAutopilot ? <Activity className="w-4 h-4 animate-spin text-white" /> : <Sparkles className="w-4 h-4" />}
+                      {isAnalyzingAutopilot ? 'Analyzing...' : 'Generate Action Plans'}
+                    </Button>
+                  ) : (
+                    <Badge variant="outline" className="border-amber-500/50 text-amber-500 bg-amber-500/10 px-3 py-1">Select a Property to start Autopilot</Badge>
+                  )}
+                </div>
+
+                {!manageProp ? (
+                  <div className="p-20 text-center border-2 border-dashed border-slate-800 rounded-3xl bg-slate-900/20 backdrop-blur-md">
+                    <Building2 className="w-16 h-16 mx-auto text-slate-700 mb-4" />
+                    <h3 className="text-xl font-bold text-slate-500">No Property Selected</h3>
+                    <p className="text-slate-600 max-w-sm mx-auto mb-6">Select a property from your portfolio or the map to see its AI resolution paths.</p>
+                    <Button variant="outline" className="border-slate-800 text-slate-400" onClick={() => setActiveTab('properties')}>Go to Properties</Button>
+                  </div>
+                ) : complianceResolutions.length === 0 ? (
+                  <div className="p-20 text-center border-2 border-dashed border-slate-800 rounded-3xl bg-slate-900/20 backdrop-blur-md">
+                    <ShieldAlert className="w-16 h-16 mx-auto text-purple-500/50 mb-4" />
+                    <h3 className="text-xl font-bold text-white mb-2">No active resolutions</h3>
+                    <p className="text-slate-500 max-w-sm mx-auto mb-6">Hit "Generate Action Plans" above to have AI analyze this property's violations and build your compliance roadmap.</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 gap-8">
+                    {complianceResolutions.map((res: any) => (
+                      <Card key={res.id} className="bg-slate-900/40 backdrop-blur-md border border-slate-700/50 overflow-hidden">
+                        <div className="flex flex-col lg:flex-row">
+                          {/* Sidebar Info */}
+                          <div className="w-full lg:w-72 bg-black/20 border-r border-slate-800/50 p-6">
+                            <div className="flex items-center gap-2 mb-4">
+                              <Badge className={`${res.violation_class === 'C' ? 'bg-red-500' : res.violation_class === 'B' ? 'bg-amber-500' : 'bg-sky-500'}`}>Class {res.violation_class}</Badge>
+                              <Badge variant="outline" className="border-slate-700 text-slate-400">ID: {res.violation_id}</Badge>
+                            </div>
+                            <h3 className="text-lg font-bold text-white mb-2">{res.violation_description}</h3>
+                            <div className="space-y-4 mt-6">
+                              <div>
+                                <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Risk Score</label>
+                                <div className="flex items-center gap-2 mt-1">
+                                  <div className="flex-1 h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                                    <div className="h-full bg-purple-500 rounded-full" style={{ width: `${res.ai_risk_score}%` }}></div>
+                                  </div>
+                                  <span className="text-sm font-bold text-purple-400">{res.ai_risk_score}</span>
+                                </div>
+                              </div>
+                              <div>
+                                <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Status</label>
+                                <div className="mt-1">
+                                  <Badge className={res.overall_status === 'resolved' ? 'bg-emerald-500' : 'bg-sky-500'}>{res.overall_status?.replace('_', ' ')}</Badge>
+                                </div>
+                              </div>
+                              <div className="p-3 bg-purple-900/10 border border-purple-500/20 rounded-lg">
+                                <p className="text-[11px] text-purple-300 italic">"AI predicts a resolution timeline of 14-21 days if steps are followed."</p>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Action Plan */}
+                          <div className="flex-1 p-6">
+                            <h4 className="text-sm font-bold text-slate-300 uppercase tracking-widest mb-6 flex items-center gap-2">
+                              <HistoryIcon className="w-4 h-4 text-purple-400" /> AI Action Plan Steps
+                            </h4>
+                            <div className="relative space-y-6 before:absolute before:left-[11px] before:top-2 before:bottom-2 before:w-[1px] before:bg-slate-800">
+                              {res.ai_action_plan?.map((step: any, idx: number) => (
+                                <div key={idx} className="relative pl-8 group">
+                                  <div className={`absolute left-0 top-1 w-6 h-6 rounded-full border-2 border-slate-900 z-10 flex items-center justify-center text-[10px] font-bold ${step.status === 'done' ? 'bg-emerald-500 text-white' : 'bg-slate-800 text-slate-400 group-hover:bg-purple-500 group-hover:text-white transition-colors'}`}>
+                                    {step.status === 'done' ? <Check className="w-3 h-3" /> : idx + 1}
+                                  </div>
+                                  <div className="flex flex-col md:flex-row gap-6 justify-between items-start">
+                                    <div className="flex-1">
+                                      <div className="flex items-center gap-2 mb-1">
+                                        <h5 className="font-bold text-white">{step.title}</h5>
+                                        <Badge variant="outline" className="text-[10px] h-4 border-slate-700 text-slate-500">{step.category}</Badge>
+                                      </div>
+                                      <p className="text-sm text-slate-400">{step.description}</p>
+                                    </div>
+                                    <div className="flex gap-2 shrink-0">
+                                      {step.category === 'Paperwork' && step.status !== 'done' && (
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          className="text-xs border-purple-500/30 text-purple-400 hover:bg-purple-500/10 h-7"
+                                          disabled={isGeneratingStepDoc}
+                                          onClick={async () => {
+                                            setIsGeneratingStepDoc(true)
+                                            try {
+                                              const auth = await supabase.auth.getSession()
+                                              const res = await fetch('/api/compliance-autopilot/generate-doc', {
+                                                method: 'POST',
+                                                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${auth.data.session?.access_token}` },
+                                                body: JSON.stringify({
+                                                  resolution_id: res.id,
+                                                  step_index: idx,
+                                                  property_id: manageProp.id
+                                                })
+                                              })
+                                              const json = await res.json()
+                                              if (json.data) {
+                                                setShowDocPreview(json.data)
+                                                // Refresh resolutions to show 'Mark Done' or linked doc
+                                                showToast("AI Document Generated!")
+                                              }
+                                            } catch (e) { showToast("Generation error", "error") }
+                                            finally { setIsGeneratingStepDoc(false) }
+                                          }}
+                                        >
+                                          {isGeneratingStepDoc ? <Activity className="w-3 h-3 animate-spin" /> : <PenTool className="w-3 h-3 mr-1" />}
+                                          Generate Doc
+                                        </Button>
+                                      )}
+                                      {['Plumbing', 'Electrical', 'HVAC', 'Lead', 'Repair', 'Construction'].some(k => step.category?.includes(k)) && step.status !== 'done' && (
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          className="text-xs border-sky-500/30 text-sky-400 hover:bg-sky-500/10 h-7"
+                                          disabled={isMatchingPro}
+                                          onClick={async () => {
+                                            setActiveAutopilotStep({ ...step, resId: res.id, idx })
+                                            setIsMatchingPro(true)
+                                            try {
+                                              const resMatch = await fetch(`/api/compliance-autopilot/match-contractor?category=${step.category}&borough=${manageProp.borough}`)
+                                              const json = await resMatch.json()
+                                              setMatchingContractors(json.data || [])
+                                            } catch (e) { console.error(e) }
+                                            finally { setIsMatchingPro(false) }
+                                          }}
+                                        >
+                                          {isMatchingPro ? <Activity className="w-3 h-3 animate-spin" /> : <HardHat className="w-3 h-3 mr-1" />}
+                                          Match Pro
+                                        </Button>
+                                      )}
+                                      <Button
+                                        size="sm"
+                                        className={`${step.status === 'done' ? 'bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20' : 'bg-slate-800/40 text-slate-400 hover:text-white'} h-7`}
+                                        onClick={async () => {
+                                          const nextStatus = step.status === 'done' ? 'pending' : 'done'
+                                          const auth = await supabase.auth.getSession()
+                                          const upRes = await fetch('/api/compliance-autopilot', {
+                                            method: 'PATCH',
+                                            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${auth.data.session?.access_token}` },
+                                            body: JSON.stringify({ resolution_id: res.id, step_index: idx, step_status: nextStatus })
+                                          })
+                                          const upJson = await upRes.json()
+                                          if (upJson.data) {
+                                            setComplianceResolutions(prev => prev.map(p => p.id === res.id ? upJson.data : p))
+                                            showToast(`Step "${step.title}" marked as ${nextStatus}`)
+                                          }
+                                        }}
+                                      >
+                                        {step.status === 'done' ? 'Resolved' : 'Mark Done'}
+                                      </Button>
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      </Card>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* DOCUMENT VAULT */}
+            {activeTab === 'documents' && (
+              <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <div className="flex justify-between items-start border-b border-slate-800 pb-6">
+                  <div className="flex-1">
+                    <h2 className="text-2xl font-bold flex items-center gap-2"><FileText className="w-6 h-6 text-sky-400" /> Document Vault</h2>
+                    <p className="text-muted-foreground mt-1">AI-powered document repository for all property certificates, leases, and reports.</p>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    {userRole === 'manager' && (
+                      <div className="flex flex-col gap-1 items-end">
+                        <span className="text-[10px] text-slate-500 font-bold tracking-widest uppercase mb-1">Select Property Context</span>
+                        <select
+                          className="bg-slate-900/80 border border-slate-700/50 text-white text-xs rounded-lg px-4 py-2.5 outline-none focus:ring-1 focus:ring-sky-500/50 min-w-[220px] shadow-lg"
+                          value={manageProp?.id || ""}
+                          onChange={(e) => {
+                            const p = properties.find(prop => prop.id === parseInt(e.target.value))
+                            setManageProp(p || null)
+                          }}
+                        >
+                          <option value="">Choose a Property...</option>
+                          {properties.map(p => (
+                            <option key={p.id} value={p.id}>{p.address}</option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                    <div className="h-10 w-px bg-slate-800 mx-1"></div>
+                    <div className="flex gap-3">
+                      <div className="relative group">
+                        <input
+                          type="file"
+                          id="doc-upload"
+                          className="hidden"
+                          onChange={async (e) => {
+                            const file = e.target.files?.[0]
+                            if (!file || !manageProp) return
+                            setIsUploadingDoc(true)
+                            try {
+                              const auth = await supabase.auth.getSession()
+                              const formData = new FormData()
+                              formData.append('file', file)
+                              formData.append('property_id', String(manageProp.id))
+
+                              const uploadRes = await fetch('/api/documents/upload', {
+                                method: 'POST',
+                                headers: { Authorization: `Bearer ${auth.data.session?.access_token}` },
+                                body: formData
+                              })
+                              const json = await uploadRes.json()
+                              if (json.data) {
+                                setVaultDocuments([json.data, ...vaultDocuments])
+                                showToast("Document Uploaded & AI Analysis Started!")
+                              } else {
+                                showToast(json.error || "Upload failed", "error")
+                              }
+                            } catch (e) { showToast("Upload error.", "error") }
+                            finally { setIsUploadingDoc(false) }
+                          }}
+                        />
+                        <Button
+                          className="bg-sky-500 hover:bg-sky-400 text-white gap-2 shadow-lg shadow-sky-500/20"
+                          disabled={isUploadingDoc || !manageProp}
+                          onClick={() => document.getElementById('doc-upload')?.click()}
+                        >
+                          {isUploadingDoc ? <Activity className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                          {isUploadingDoc ? 'Uploading...' : 'Upload Document'}
+                        </Button>
+                        {!manageProp && (
+                          <div className="absolute -bottom-8 right-0 text-[10px] text-amber-500 font-bold whitespace-nowrap animate-pulse">
+                            Select a property first
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 </div>
 
-                <Card className="bg-slate-900/50 border border-slate-800/50 backdrop-blur-sm overflow-hidden">
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse">
-                      <thead>
-                        <tr className="border-b border-slate-800 bg-slate-900/80">
-                          <th className="p-4 text-xs font-semibold text-slate-400 uppercase tracking-wider">Tenant Name</th>
-                          <th className="p-4 text-xs font-semibold text-slate-400 uppercase tracking-wider">Email</th>
-                          <th className="p-4 text-xs font-semibold text-slate-400 uppercase tracking-wider">Property</th>
-                          <th className="p-4 text-xs font-semibold text-slate-400 uppercase tracking-wider">Unit</th>
-                          <th className="p-4 text-xs font-semibold text-slate-400 uppercase tracking-wider">Status</th>
-                          <th className="p-4 text-xs font-semibold text-slate-400 uppercase tracking-wider">Joined</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {users.filter(p => p.role === 'tenant' && properties.some(prop => prop.id === p.property_id)).map((tenant) => {
-                          const prop = properties.find(p => p.id === tenant.property_id);
-                          return (
-                            <tr key={tenant.id} className="border-b border-slate-800/50 hover:bg-slate-800/30 transition-colors group">
-                              <td className="p-4">
-                                <span className="text-sm font-semibold text-slate-200">{tenant.full_name || 'Anonymous Tenant'}</span>
-                              </td>
-                              <td className="p-4">
-                                <span className="text-sm text-slate-400">{tenant.email}</span>
-                              </td>
-                              <td className="p-4">
-                                <span className="text-sm text-slate-300">{prop?.address || 'Unknown Property'}</span>
-                              </td>
-                              <td className="p-4">
-                                <Badge variant="outline" className="bg-slate-800 text-slate-300 border-slate-700 whitespace-nowrap">
-                                  {tenant.unit || 'N/A'}
-                                </Badge>
-                              </td>
-                              <td className="p-4">
-                                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                                  {tenant.status}
-                                </span>
-                              </td>
-                              <td className="p-4">
-                                <span className="text-xs text-slate-500">{new Date(tenant.created_at).toLocaleDateString()}</span>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                        {users.filter(p => p.role === 'tenant' && properties.some(prop => prop.id === p.property_id)).length === 0 && (
-                          <tr>
-                            <td colSpan={6} className="text-center p-8 text-slate-500">
-                              No tenants registered yet. Distribute your property access codes for tenants to sign up.
-                            </td>
-                          </tr>
-                        )}
-                      </tbody>
-                    </table>
+                <div className="flex gap-2 bg-slate-900/40 p-1 rounded-xl border border-slate-700/50 w-fit">
+                  {['all', 'lease', 'insurance', 'permit', 'violation'].map(cat => (
+                    <Button
+                      key={cat}
+                      variant="ghost"
+                      size="sm"
+                      className={`text-xs px-4 rounded-lg capitalize ${docFilter === cat ? 'bg-sky-500/20 text-sky-400' : 'text-slate-500'}`}
+                      onClick={() => setDocFilter(cat)}
+                    >
+                      {cat}
+                    </Button>
+                  ))}
+                </div>
+
+                {vaultDocuments.length === 0 ? (
+                  <div className="p-20 text-center border-2 border-dashed border-slate-800/50 rounded-3xl bg-slate-900/20 backdrop-blur-md flex flex-col items-center justify-center">
+                    <div className="w-20 h-20 rounded-full bg-slate-800/30 flex items-center justify-center mb-6 border border-slate-700/50 shadow-inner">
+                      <FileText className="w-10 h-10 text-slate-600" />
+                    </div>
+                    <h3 className="text-xl font-bold text-slate-400 mb-2">
+                      {!manageProp ? "Select a property to view its vault" : "The Vault is Empty"}
+                    </h3>
+                    <p className="text-slate-600 max-w-sm mx-auto mb-8">
+                      {!manageProp
+                        ? "Select a property from the dropdown above to manage its compliance documents and AI-extracted data."
+                        : "Upload your first compliance document for this property to enable AI auto-extraction and expiry monitoring."}
+                    </p>
+                    {manageProp && (
+                      <Button variant="outline" className="border-slate-700/50 text-slate-400 hover:bg-slate-800" onClick={() => document.getElementById('doc-upload')?.click()}>
+                        <Plus className="w-4 h-4 mr-2" /> Start Uploading
+                      </Button>
+                    )}
                   </div>
-                </Card>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                    {vaultDocuments.filter(d => docFilter === 'all' || d.category === docFilter).map((doc: any) => (
+                      <Card key={doc.id} className="bg-slate-900/40 backdrop-blur-md border border-slate-700/50 group overflow-hidden hover:border-sky-500/30 transition-all cursor-pointer" onClick={() => setSelectedDoc(doc)}>
+                        <CardContent className="p-0">
+                          <div className="aspect-[16/9] bg-slate-800/50 relative flex items-center justify-center border-b border-slate-800">
+                            {doc.file_type?.includes('image') ? (
+                              <img src={doc.file_url} className="w-full h-full object-cover opacity-60" />
+                            ) : (
+                              <FileText className="w-10 h-10 text-slate-600" />
+                            )}
+                            <div className="absolute top-2 right-2 flex gap-2">
+                              <Badge className="bg-black/60 capitalize backdrop-blur-md border-0">{doc.category}</Badge>
+                              {doc.expires_at && (
+                                <Badge className={`${new Date(doc.expires_at) < new Date() ? 'bg-red-500' : 'bg-amber-500'} text-[10px]`}>
+                                  Exp: {new Date(doc.expires_at).toLocaleDateString()}
+                                </Badge>
+                              )}
+                            </div>
+                          </div>
+                          <div className="p-4">
+                            <div className="flex justify-between items-start gap-2">
+                              <h4 className="font-bold text-white truncate flex-1">{doc.file_name || 'Unnamed Document'}</h4>
+                              <span className="text-[10px] text-slate-500 whitespace-nowrap">{new Date(doc.created_at).toLocaleDateString()}</span>
+                            </div>
+                            <p className="text-xs text-slate-400 mt-2 line-clamp-2 min-h-[32px]">{doc.ai_summary || 'AI analysis in progress...'}</p>
+
+                            <div className="flex items-center gap-3 mt-4 pt-4 border-t border-slate-800/50">
+                              <div className="flex-1 flex gap-1">
+                                {!doc.ai_processed && <Activity className="w-3 h-3 text-sky-400 animate-spin" />}
+                                <span className="text-[10px] font-bold text-sky-400 uppercase tracking-widest">{doc.ai_processed ? 'AI Extracted' : 'Processing...'}</span>
+                              </div>
+                              <Button size="icon" variant="ghost" className="h-6 w-6 text-slate-500 hover:text-red-400" onClick={(e) => {
+                                e.stopPropagation()
+                                if (confirm("Delete this document permanently?")) {
+                                  // Call API
+                                  fetch(`/api/documents?id=${doc.id}`, { method: 'DELETE' })
+                                    .then(() => {
+                                      setVaultDocuments(prev => prev.filter(p => p.id !== doc.id))
+                                      showToast("Document removed.")
+                                    })
+                                }
+                              }}><Trash2 className="w-3 h-3" /></Button>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 
@@ -2834,9 +3629,9 @@ export default function APP_ROOT() {
                   {(!userProfile?.membership_tier || userProfile.membership_tier === 'Free') && (
                     <Button className="bg-indigo-500 hover:bg-indigo-500 text-white gap-2" onClick={() => {
                       // Dummy handler for upgrade
-                      alert("This will redirect to Stripe Checkout to upgrade your tier to Pro ($29/mo).")
+                      alert("This will redirect to Stripe Checkout to upgrade your tier to Growth ($29/mo).")
                     }}>
-                      <ArrowUpCircle className="w-4 h-4" /> Unlock Pro Features
+                      <ArrowUpCircle className="w-4 h-4" /> Unlock Growth Features
                     </Button>
                   )}
                 </div>
@@ -2922,8 +3717,8 @@ export default function APP_ROOT() {
                         </CardContent>
                         {(!userProfile?.membership_tier || userProfile.membership_tier === 'Free') && (
                           <div className="p-4 bg-indigo-500/10 border-t border-indigo-500/20 text-center">
-                            <p className="text-xs text-indigo-300 mb-2">Automated alerts available in Pro.</p>
-                            <Button size="sm" variant="outline" className="w-full border-indigo-500/50 text-indigo-400 hover:bg-indigo-500/20" onClick={() => alert("Upgrade to Pro to unlock automated D-30 and D-7 reminders via Email/SMS.")}>Enable Alerts</Button>
+                            <p className="text-xs text-indigo-300 mb-2">Automated alerts available in Growth.</p>
+                            <Button size="sm" variant="outline" className="w-full border-indigo-500/50 text-indigo-400 hover:bg-indigo-500/20" onClick={() => alert("Upgrade to Growth to unlock automated D-30 and D-7 reminders via Email/SMS.")}>Enable Alerts</Button>
                           </div>
                         )}
                       </Card>
@@ -3286,7 +4081,7 @@ export default function APP_ROOT() {
                           <Avatar className="w-12 h-12 border-2 border-slate-700/50"><AvatarImage src={`https://api.dicebear.com/7.x/initials/svg?seed=${c.name}`} /><AvatarFallback>PRO</AvatarFallback></Avatar>
                           <div>
                             <div className="font-bold text-lg text-white">{c.name}</div>
-                            <div className="text-sm text-indigo-400 font-medium">{c.type}</div>
+                            {c.company_name && <div className="text-sm text-slate-400 font-medium">{c.company_name}</div>}
                           </div>
                         </div>
 
@@ -3374,6 +4169,7 @@ export default function APP_ROOT() {
             {activeTab === 'map' && <div className="h-full rounded-xl overflow-hidden border border-border"><MapViewer properties={properties.filter(p => !['Pending Verification', 'Rejected'].includes(p.status || ''))} onSelectProperty={setManageProp} /></div>}
           </div>
         </ErrorBoundary>
+        <DocumentPreviewModal doc={selectedDoc} onClose={() => setSelectedDoc(null)} />
       </main>
 
       {/* MANAGE PROPERTY MODAL */}
@@ -3405,6 +4201,25 @@ export default function APP_ROOT() {
                     {isGeneratingPDF ? <div className="w-4 h-4 border-2 border-gray-500 border-t-white rounded-full animate-spin mr-2" /> : <Download className="w-4 h-4 mr-2" />}
                     {userProfile?.membership_tier === 'Free' ? 'Pro Feature' : 'Download Report'}
                   </Button>
+                  {userRole === 'manager' && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="border-red-500/30 text-red-500 hover:bg-red-500/10"
+                      onClick={() => {
+                        setDeleteConfirmTitle("Delete Property")
+                        setDeleteConfirmMessage(`Are you sure you want to PERMANENTLY delete ${manageProp.address}? All documents, requests, and city data history will be lost.`)
+                        setOnConfirmDelete(() => async () => {
+                          await handleDeleteProperty(manageProp.id)
+                          setDeleteConfirmOpen(false)
+                          setDeleteConfirmText("")
+                        })
+                        setDeleteConfirmOpen(true)
+                      }}
+                    >
+                      <Trash2 className="w-4 h-4 mr-2" /> Delete Property
+                    </Button>
+                  )}
                   <button onClick={() => setManageProp(null)} className="text-slate-400 hover:text-white transition-colors"><X className="w-6 h-6" /></button>
                 </div>
               </div>
@@ -3417,6 +4232,12 @@ export default function APP_ROOT() {
                 </button>
                 <button onClick={() => setPropTab('oath')} className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${propTab === 'oath' ? 'border-red-500 text-red-400' : 'border-transparent text-slate-400 hover:text-gray-300'}`}>
                   OATH Hearings {oathHearings.length > 0 && <span className="bg-red-500/20 text-red-400 py-0.5 px-2 rounded-full text-xs">{oathHearings.length}</span>}
+                </button>
+                <button onClick={() => setPropTab('autopilot')} className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${propTab === 'autopilot' ? 'border-purple-400 text-purple-300' : 'border-transparent text-slate-400 hover:text-gray-300'}`}>
+                  <Sparkles className="w-4 h-4" /> AI Autopilot
+                </button>
+                <button onClick={() => setPropTab('vault')} className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${propTab === 'vault' ? 'border-sky-400 text-sky-300' : 'border-transparent text-slate-400 hover:text-gray-300'}`}>
+                  <FileText className="w-4 h-4" /> Documents
                 </button>
               </div>
 
@@ -3570,6 +4391,189 @@ export default function APP_ROOT() {
                         ))}
                       </div>
                     )}
+                  </div>
+                )}
+
+                {propTab === 'autopilot' && (
+                  <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <h3 className="text-xl font-bold flex items-center gap-2 text-purple-400"><Sparkles className="w-5 h-5" /> AI Resolution Roadmap</h3>
+                        <p className="text-sm text-slate-400 mt-1">Automated compliance steps and risk analysis for this property.</p>
+                      </div>
+                      <Button
+                        size="sm"
+                        className="bg-purple-600 hover:bg-purple-500 text-white gap-2"
+                        disabled={isAnalyzingAutopilot}
+                        onClick={async () => {
+                          if (!manageProp.bbl) { showToast("BBL missing for analysis.", "info"); return; }
+                          setIsAnalyzingAutopilot(true)
+                          try {
+                            const resVio = await fetch(`/api/check_violations?bbl=${manageProp.bbl}`)
+                            const jsonVio = await resVio.json()
+                            const vios = jsonVio.data || []
+                            if (vios.length === 0) { showToast("No open violations found.", "info"); return; }
+                            const auth = await supabase.auth.getSession()
+                            const res = await fetch('/api/compliance-autopilot', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${auth.data.session?.access_token}` },
+                              body: JSON.stringify({ property_id: manageProp.id, violations: vios })
+                            })
+                            const json = await res.json()
+                            if (json.data) {
+                              setComplianceResolutions(json.data)
+                              showToast("AI Autopilot initialized!")
+                            } else {
+                              const errorMsg = json.error || "Analysis failed."
+                              showToast(errorMsg, "error")
+                            }
+                          } catch (e: any) {
+                            const errorMsg = e.message || "Error starting Autopilot."
+                            showToast(errorMsg, "error")
+                          }
+                          finally { setIsAnalyzingAutopilot(false) }
+                        }}
+                      >
+                        {isAnalyzingAutopilot ? <Activity className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                        {isAnalyzingAutopilot ? 'Analyzing...' : 'Generate Roadmap'}
+                      </Button>
+                    </div>
+
+                    {complianceResolutions.length === 0 ? (
+                      <div className="p-16 text-center border border-slate-700/50 border-dashed rounded-2xl bg-slate-900/20 backdrop-blur-md">
+                        <ShieldAlert className="w-12 h-12 mx-auto text-purple-500/50 mb-3" />
+                        <h4 className="font-bold text-white mb-1">No Active AI Roadmap</h4>
+                        <p className="text-sm text-slate-500 max-w-xs mx-auto mb-4">Click "Generate Roadmap" to analyze violations and build a compliance strategy.</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-6">
+                        {complianceResolutions.map((res: any) => (
+                          <div key={res.id} className="bg-slate-900/60 border border-slate-700/50 rounded-xl overflow-hidden">
+                            <div className="p-4 border-b border-slate-800 flex justify-between items-center bg-black/20">
+                              <div className="flex items-center gap-3">
+                                <Badge className={`${res.violation_class === 'C' ? 'bg-red-500' : 'bg-amber-500'}`}>Class {res.violation_class}</Badge>
+                                <span className="font-bold text-sm text-white">#{res.violation_id}</span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <span className="text-[10px] text-slate-500 uppercase font-bold">AI Risk Score:</span>
+                                <span className="text-sm font-bold text-purple-400">{res.ai_risk_score}</span>
+                              </div>
+                            </div>
+                            <div className="p-4 space-y-4">
+                              <p className="text-sm text-gray-300 italic">"{res.violation_description}"</p>
+
+                              <div className="space-y-3 pt-2">
+                                {res.ai_action_plan?.map((step: any, idx: number) => (
+                                  <div key={idx} className="flex gap-3 items-start group">
+                                    <div className={`mt-1 w-5 h-5 rounded-full flex items-center justify-center shrink-0 text-[10px] font-bold ${step.status === 'done' ? 'bg-emerald-500/20 text-emerald-500 border border-emerald-500/30' : 'bg-slate-800 text-slate-500'}`}>
+                                      {step.status === 'done' ? <Check className="w-3 h-3" /> : idx + 1}
+                                    </div>
+                                    <div className="flex-1">
+                                      <div className="flex justify-between items-start gap-2">
+                                        <div className="text-xs font-bold text-white group-hover:text-purple-300 transition-colors">{step.title}</div>
+                                        <button
+                                          onClick={async () => {
+                                            const nextStatus = step.status === 'done' ? 'pending' : 'done'
+                                            const auth = await supabase.auth.getSession()
+                                            const upRes = await fetch('/api/compliance-autopilot', {
+                                              method: 'PATCH',
+                                              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${auth.data.session?.access_token}` },
+                                              body: JSON.stringify({ resolution_id: res.id, step_index: idx, step_status: nextStatus })
+                                            })
+                                            const upJson = await upRes.json()
+                                            if (upJson.data) {
+                                              setComplianceResolutions(prev => prev.map(p => p.id === res.id ? upJson.data : p))
+                                            }
+                                          }}
+                                          className={`text-[10px] uppercase font-bold px-1.5 py-0.5 rounded transition-colors ${step.status === 'done' ? 'text-emerald-500 hover:text-red-500' : 'text-slate-500 hover:text-white'}`}
+                                        >
+                                          {step.status === 'done' ? 'Undo' : 'Mark Done'}
+                                        </button>
+                                      </div>
+                                      <p className="text-[11px] text-slate-400 leading-tight">{step.description}</p>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {propTab === 'vault' && (
+                  <div className="space-y-6">
+                    <div className="flex justify-between items-center border-b border-slate-700/50 pb-4">
+                      <div>
+                        <h3 className="text-xl font-bold text-white flex items-center gap-2"><FileText className="w-5 h-5 text-sky-400" /> Building Vault</h3>
+                        <p className="text-sm text-slate-400 mt-1">Property-specific document repository.</p>
+                      </div>
+                      <div className="flex gap-2">
+                        <input
+                          type="file"
+                          id="modal-doc-upload"
+                          className="hidden"
+                          onChange={async (e) => {
+                            const file = e.target.files?.[0]
+                            if (!file || !manageProp) return
+                            setIsUploadingDoc(true)
+                            try {
+                              const auth = await supabase.auth.getSession()
+                              const formData = new FormData()
+                              formData.append('file', file)
+                              formData.append('property_id', String(manageProp.id))
+
+                              const uploadRes = await fetch('/api/documents/upload', {
+                                method: 'POST',
+                                headers: { Authorization: `Bearer ${auth.data.session?.access_token}` },
+                                body: formData
+                              })
+                              const json = await uploadRes.json()
+                              if (json.data) {
+                                setVaultDocuments([json.data, ...vaultDocuments])
+                                showToast("Document Uploaded!")
+                              }
+                            } catch (e) { showToast("Upload error", "error") }
+                            finally { setIsUploadingDoc(false) }
+                          }}
+                        />
+                        <Button
+                          size="sm"
+                          className="bg-sky-500 hover:bg-sky-400 text-white gap-2"
+                          onClick={() => document.getElementById('modal-doc-upload')?.click()}
+                          disabled={isUploadingDoc}
+                        >
+                          {isUploadingDoc ? <Activity className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                          Upload
+                        </Button>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {vaultDocuments.filter(d => d.property_id === manageProp.id).length === 0 ? (
+                        <div className="col-span-full p-12 text-center border border-slate-700/50 border-dashed rounded-xl">
+                          <FileText className="w-12 h-12 text-slate-600 mx-auto mb-3" />
+                          <p className="text-slate-500">No documents found for this property.</p>
+                        </div>
+                      ) : (
+                        vaultDocuments.filter(d => d.property_id === manageProp.id).map((doc: any) => (
+                          <Card key={doc.id} className="bg-slate-900/40 border-slate-800 hover:border-sky-500/30 transition-all cursor-pointer" onClick={() => setSelectedDoc(doc)}>
+                            <CardContent className="p-4 flex gap-4 items-center">
+                              <div className="w-12 h-12 rounded bg-slate-800 flex items-center justify-center shrink-0">
+                                <FileText className="w-6 h-6 text-slate-500" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <h4 className="font-bold text-white text-sm truncate">{doc.file_name}</h4>
+                                <p className="text-[10px] text-slate-500 uppercase font-bold tracking-widest">{doc.category} • {new Date(doc.created_at).toLocaleDateString()}</p>
+                              </div>
+                              <div className={`w-2 h-2 rounded-full ${doc.ai_processed ? 'bg-sky-500' : 'bg-amber-500 animate-pulse'}`} />
+                            </CardContent>
+                          </Card>
+                        ))
+                      )}
+                    </div>
                   </div>
                 )}
               </div>
@@ -3861,7 +4865,58 @@ export default function APP_ROOT() {
         )}
       </AnimatePresence>
 
-    </div>
+      {/* GLOBAL DELETE CONFIRMATION MODAL */}
+      <AnimatePresence>
+        {deleteConfirmOpen && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[10000] bg-black/90 backdrop-blur-md flex items-center justify-center p-4">
+            <div className="bg-slate-900/40 backdrop-blur-md border border-slate-700/50 rounded-2xl w-full max-w-sm shadow-[0_0_50px_rgba(0,0,0,0.8)] overflow-hidden p-6 space-y-6">
+              <div className="text-center space-y-2">
+                <div className="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <ShieldAlert className="w-8 h-8 text-red-500" />
+                </div>
+                <h3 className="text-xl font-bold text-white">{deleteConfirmTitle}</h3>
+                <p className="text-sm text-slate-400">{deleteConfirmMessage}</p>
+              </div>
+
+              <div className="space-y-4">
+                <div className="text-xs text-center text-slate-500 uppercase font-bold tracking-widest">Type <span className="text-red-400">DELETE</span> to confirm</div>
+                <Input
+                  value={deleteConfirmText}
+                  onChange={(e) => setDeleteConfirmText(e.target.value)}
+                  placeholder="Type DELETE here..."
+                  className="bg-slate-950 border-slate-700/50 text-white text-center font-bold tracking-widest uppercase h-12 outline-none focus:ring-1 focus:ring-red-500"
+                />
+              </div>
+
+              <div className="flex gap-3">
+                <Button
+                  variant="ghost"
+                  className="flex-1 text-slate-400 hover:text-white"
+                  onClick={() => {
+                    setDeleteConfirmOpen(false)
+                    setDeleteConfirmText("")
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  className="flex-1 bg-red-600 hover:bg-red-500 text-white font-bold"
+                  disabled={deleteConfirmText !== "DELETE" || isDeletingProperty}
+                  onClick={async () => {
+                    if (onConfirmDelete) {
+                      await onConfirmDelete()
+                    }
+                  }}
+                >
+                  {isDeletingProperty ? <Activity className="w-4 h-4 animate-spin" /> : "Delete Forever"}
+                </Button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+    </div >
   )
 }
 

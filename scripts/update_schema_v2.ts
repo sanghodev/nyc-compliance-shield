@@ -139,13 +139,65 @@ $$ language plpgsql security definer;
 create or replace function public.delete_user(target_id uuid)
 returns void as $$
 begin
-  -- 1. Profiles/Tenants will cascade delete due to FK constraint
-  -- 2. Delete from Auth Users
+  -- 1. Clear references in profiles that point to the properties we're about to delete
+  update public.profiles 
+  set property_id = null 
+  where property_id in (select id from public.properties where manager_id = target_id);
+
+  -- 2. Related data in properties-dependent tables
+  delete from public.contractor_reviews 
+  where reviewer_id = target_id 
+     or property_id in (select id from public.properties where manager_id = target_id);
+
+  delete from public.requests 
+  where tenant_id = target_id 
+     or property_id in (select id from public.properties where manager_id = target_id);
+
+  delete from public.tenants 
+  where id = target_id 
+     or property_id in (select id from public.properties where manager_id = target_id);
+
+  -- 3. Properties (Cascades to documents, resolutions)
+  delete from public.properties where manager_id = target_id;
+
+  -- 4. Contractors (Safely check if column exists)
+  if exists (
+    select 1 from information_schema.columns 
+    where table_schema = 'public' and table_name = 'contractors' and column_name = 'manager_id'
+  ) then
+    execute format('delete from public.contractors where manager_id = %L', target_id);
+  end if;
+
+  -- 5. Profiles
+  delete from public.profiles where id = target_id;
+
+  -- 6. Auth User
   delete from auth.users where id = target_id;
 end;
 $$ language plpgsql security definer;
 
--- 10. REQUESTS RLS POLICIES (Fix missing requests issue)
+-- 10. RPC: Property 삭제 (Hard Delete)
+create or replace function public.delete_property(target_id bigint)
+returns void as $$
+begin
+  -- 1. Clear references in profiles
+  update public.profiles 
+  set property_id = null 
+  where property_id = target_id;
+
+  -- 2. Related data
+  delete from public.contractor_reviews where property_id = target_id;
+  delete from public.requests where property_id = target_id;
+  delete from public.tenants where property_id = target_id;
+  delete from public.violation_resolutions where property_id = target_id;
+  delete from public.documents where property_id = target_id;
+
+  -- 3. Delete property
+  delete from public.properties where id = target_id;
+end;
+$$ language plpgsql security definer;
+
+-- 11. REQUESTS RLS POLICIES (Fix missing requests issue)
 alter table public.requests enable row level security;
 
 drop policy if exists "Enable read access for all" on public.requests;

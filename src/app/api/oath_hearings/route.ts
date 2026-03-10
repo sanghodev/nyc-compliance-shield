@@ -16,12 +16,15 @@ export async function GET(request: NextRequest) {
 
     const apiUrl = 'https://data.cityofnewyork.us/resource/6bgk-3dad.json'
 
-    // According to DOB ECB, we can search by BBL directly.
+    // BBL is 10 digits: Boro(1) + Block(5) + Lot(4)
+    const boro = bbl.substring(0, 1)
+    const block = bbl.substring(1, 6)
+    const lot = bbl.substring(6, 10)
+
     const params = new URLSearchParams({
-        bbl: bbl,
-        // Only get tickets that are active / unresolved or have a balance due.
-        // The exact field name depends on the schema, but usually it's ticket_status or hearing_status.
-        // To be safe, we fetch the most recent 20 tickets for this BBL.
+        boro: boro,
+        block: block,
+        lot: lot,
         '$order': 'issue_date DESC',
         '$limit': '20',
     })

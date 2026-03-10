@@ -69,8 +69,44 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 CREATE OR REPLACE FUNCTION public.delete_user(target_id UUID)
 RETURNS VOID AS $$
 BEGIN
-  DELETE FROM public.profiles WHERE id = target_id; -- Delete profile first
-  DELETE FROM auth.users WHERE id = target_id;      -- Delete auth user
+  -- 1. Clear references in profiles that point to the properties we're about to delete
+  UPDATE public.profiles 
+  SET property_id = NULL 
+  WHERE property_id IN (SELECT id FROM public.properties WHERE manager_id = target_id);
+
+  -- 2. Related data in properties-dependent tables
+  -- contractor_reviews (reviewer_id, property_id)
+  DELETE FROM public.contractor_reviews 
+  WHERE reviewer_id = target_id 
+     OR property_id IN (SELECT id FROM public.properties WHERE manager_id = target_id);
+
+  -- requests (tenant_id, property_id)
+  DELETE FROM public.requests 
+  WHERE tenant_id = target_id 
+     OR property_id IN (SELECT id FROM public.properties WHERE manager_id = target_id);
+
+  -- tenants (id, property_id)
+  DELETE FROM public.tenants 
+  WHERE id = target_id 
+     OR property_id IN (SELECT id FROM public.properties WHERE manager_id = target_id);
+
+  -- 3. properties (manager_id)
+  -- Documents and Violation Resolutions will cascade delete (ON DELETE CASCADE)
+  DELETE FROM public.properties WHERE manager_id = target_id;
+
+  -- 4. contractors (manager_id) - 컬럼이 존재할 때만 삭제 시도 (에러 방지)
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_schema = 'public' AND table_name = 'contractors' AND column_name = 'manager_id'
+  ) THEN
+    EXECUTE format('DELETE FROM public.contractors WHERE manager_id = %L', target_id);
+  END IF;
+
+  -- 5. Profiles
+  DELETE FROM public.profiles WHERE id = target_id;
+
+  -- 6. Auth User
+  DELETE FROM auth.users WHERE id = target_id;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
