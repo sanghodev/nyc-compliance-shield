@@ -1225,6 +1225,7 @@ export default function APP_ROOT() {
   const [isUploadingDoc, setIsUploadingDoc] = useState(false)
   const [selectedDoc, setSelectedDoc] = useState<any>(null)
   const [docFilter, setDocFilter] = useState('all')
+  const [vaultProp, setVaultProp] = useState<Property | null>(null)
 
   // Autopilot Interaction State
   const [activeAutopilotStep, setActiveAutopilotStep] = useState<any>(null)
@@ -1248,6 +1249,13 @@ export default function APP_ROOT() {
   const [ll97Props, setLl97Props] = useState({ address: '', squareFootage: '', heatingFuel: 'Natural Gas', buildingType: 'Multifamily Residential', yearBuilt: '' })
   const [ll97Result, setLl97Result] = useState<any>(null)
   const [ll97Loading, setLl97Loading] = useState(false)
+
+  // Compliance Calendar State
+  const [calSearch, setCalSearch] = useState("")
+  const [calCategoryFilter, setCalCategoryFilter] = useState("all")
+  const [calStatusFilter, setCalStatusFilter] = useState("all")
+  const [vaultSearch, setVaultSearch] = useState("")
+
   const runLL97Simulation = async (property?: any) => {
     setLl97Loading(true)
     setLl97Result(null)
@@ -2044,14 +2052,14 @@ export default function APP_ROOT() {
     if (proofDocument) {
       const fileExt = proofDocument.name.split('.').pop()
       const fileName = `${Math.random()}.${fileExt}`
-      const filePath = `${user.id}/${fileName}`
+      const filePath = `verifications/${user.id}/${fileName}`
 
-      const { error: uploadError } = await supabase.storage.from('property_verifications').upload(filePath, proofDocument)
+      const { error: uploadError } = await supabase.storage.from('document-vault').upload(filePath, proofDocument)
       if (uploadError) {
         showToast("Error uploading verification document", "info")
         console.error(uploadError)
       } else {
-        const { data } = supabase.storage.from('property_verifications').getPublicUrl(filePath)
+        const { data } = supabase.storage.from('document-vault').getPublicUrl(filePath)
         proof_url = data.publicUrl
       }
     }
@@ -3034,10 +3042,61 @@ export default function APP_ROOT() {
               </motion.div>
             )
           }
-        </AnimatePresence >
-      </div >
+        </AnimatePresence>
+      </div>
     )
   }
+
+  // Flatten compliance events for the calendar list view
+  const allCalendarEvents = properties.flatMap(p => [
+    { id: `${p.id}-ll97`, propertyAddress: p.address, propertyId: p.id, law: 'LL97', category: 'Carbon Emissions', deadline: 'May 1, 2025', status: 'Action Req', color: 'text-amber-500', bgColor: 'bg-amber-500/20', icon: 'Flame' },
+    { id: `${p.id}-ll84`, propertyAddress: p.address, propertyId: p.id, law: 'LL84', category: 'Energy Benchmarking', deadline: 'May 1, 2025', status: 'Approaching', color: 'text-sky-400', bgColor: 'bg-sky-400/20', icon: 'Zap' },
+    { id: `${p.id}-ll11`, propertyAddress: p.address, propertyId: p.id, law: 'LL11', category: 'Facade Inspection', deadline: 'Cycle 10', status: 'Pending', color: 'text-purple-500', bgColor: 'bg-purple-500/20', icon: 'Building2' },
+    { id: `${p.id}-ll152`, propertyAddress: p.address, propertyId: p.id, law: 'LL152', category: 'Gas Piping', deadline: 'Dec 31, 2025', status: 'On Track', color: 'text-gray-400', bgColor: 'bg-slate-800/50', icon: 'Scale' },
+  ])
+
+  const filteredCalendarEvents = allCalendarEvents.filter(ev => {
+    const matchesSearch = ev.propertyAddress.toLowerCase().includes(calSearch.toLowerCase())
+    const matchesCategory = calCategoryFilter === 'all' || ev.law === calCategoryFilter
+    const matchesStatus = calStatusFilter === 'all' || ev.status === calStatusFilter
+    return matchesSearch && matchesCategory && matchesStatus
+  })
+
+  // Group by property for the new cleaner UI
+  const groupedCalendar = properties.map(p => {
+    const events = filteredCalendarEvents.filter(e => e.propertyId === p.id)
+    if (events.length === 0) return null
+
+    // Most urgent event for this building
+    const primaryEvent = [...events].sort((a, b) => {
+      if (a.status === 'Action Req' && b.status !== 'Action Req') return -1
+      if (a.status !== 'Action Req' && b.status === 'Action Req') return 1
+      return 0
+    })[0]
+
+    return {
+      property: p,
+      allLaws: allCalendarEvents.filter(e => e.propertyId === p.id), // All 4 laws for this building
+      filteredEvents: events,
+      primaryEvent: primaryEvent,
+      criticalCount: events.filter(e => e.status === 'Action Req').length,
+      warningCount: events.filter(e => e.status === 'Approaching').length
+    }
+  }).filter(Boolean).sort((a: any, b: any) => {
+    // Sort grouped list by primary event urgency
+    if (a.primaryEvent.status === 'Action Req' && b.primaryEvent.status !== 'Action Req') return -1
+    return 0
+  })
+
+  // Filter vault documents
+  const filteredVaultDocuments = vaultDocuments.filter(d => {
+    const matchesProperty = !vaultProp || String(d.property_id) === String(vaultProp.id)
+    const matchesCategory = docFilter === 'all' || d.category === docFilter
+    const matchesSearch = vaultSearch === "" ||
+      d.file_name?.toLowerCase().includes(vaultSearch.toLowerCase()) ||
+      (d.ai_analysis?.overall_summary && typeof d.ai_analysis.overall_summary === 'string' && d.ai_analysis.overall_summary.toLowerCase().includes(vaultSearch.toLowerCase()))
+    return matchesProperty && matchesCategory && matchesSearch
+  }).sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
 
   return (
     <div className="flex h-screen bg-background text-foreground overflow-hidden font-sans">
@@ -3455,435 +3514,364 @@ export default function APP_ROOT() {
 
             {/* DOCUMENT VAULT */}
             {activeTab === 'documents' && (
-              <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                <div className="flex justify-between items-start border-b border-slate-800 pb-6">
-                  <div className="flex-1">
-                    <h2 className="text-2xl font-bold flex items-center gap-2"><FileText className="w-6 h-6 text-sky-400" /> Document Vault</h2>
-                    <p className="text-muted-foreground mt-1">AI-powered document repository for all property certificates, leases, and reports.</p>
+              <div className="space-y-6">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                  <div>
+                    <h2 className="text-2xl font-bold flex items-center gap-2"><ShieldCheck className="w-6 h-6 text-sky-400" /> Document Vault</h2>
+                    <p className="text-muted-foreground mt-1">AI-powered centralized document repository for all compliance records.</p>
                   </div>
-                  <div className="flex items-center gap-4">
+
+                  <div className="flex flex-wrap items-center gap-3">
                     {userRole === 'manager' && (
-                      <div className="flex flex-col gap-1 items-end">
-                        <span className="text-[10px] text-slate-500 font-bold tracking-widest uppercase mb-1">Select Property Context</span>
+                      <div className="flex gap-2">
                         <select
-                          className="bg-slate-900/80 border border-slate-700/50 text-white text-xs rounded-lg px-4 py-2.5 outline-none focus:ring-1 focus:ring-sky-500/50 min-w-[220px] shadow-lg"
-                          value={manageProp?.id || ""}
+                          className="bg-slate-950 border border-slate-800 text-slate-300 text-sm rounded-md px-3 py-2 outline-none focus:ring-1 focus:ring-sky-500 min-w-[200px]"
+                          value={vaultProp?.id ? String(vaultProp.id) : ""}
                           onChange={(e) => {
-                            const p = properties.find(prop => prop.id === parseInt(e.target.value))
-                            setManageProp(p || null)
+                            const val = e.target.value
+                            const p = properties.find(prop => String(prop.id) === val) || null
+                            setVaultProp(p)
                           }}
                         >
-                          <option value="">Choose a Property...</option>
+                          <option value="">All Buildings</option>
                           {properties.map(p => (
-                            <option key={p.id} value={p.id}>{p.address}</option>
+                            <option key={p.id} value={String(p.id)}>{p.address}</option>
                           ))}
                         </select>
                       </div>
                     )}
-                    <div className="h-10 w-px bg-slate-800 mx-1"></div>
-                    <div className="flex gap-3">
-                      <div className="relative group">
-                        <input
-                          type="file"
-                          id="doc-upload"
-                          className="hidden"
-                          onChange={async (e) => {
-                            const file = e.target.files?.[0]
-                            if (!file || !manageProp) return
-                            setIsUploadingDoc(true)
-                            try {
-                              const auth = await supabase.auth.getSession()
-                              const formData = new FormData()
-                              formData.append('file', file)
-                              formData.append('property_id', String(manageProp.id))
+                    <div className="h-10 w-px bg-slate-800 hidden sm:block"></div>
+                    <div className="relative group">
+                      <input
+                        type="file"
+                        id="doc-upload"
+                        className="hidden"
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0]
+                          if (!file) return
+                          if (!vaultProp && userRole === 'manager') {
+                            showToast("Please select a property first", "info")
+                            return
+                          }
+                          setIsUploadingDoc(true)
+                          try {
+                            const auth = await supabase.auth.getSession()
+                            const formData = new FormData()
+                            formData.append('file', file)
+                            if (vaultProp) formData.append('property_id', String(vaultProp.id))
 
-                              const uploadRes = await fetch('/api/documents/upload', {
-                                method: 'POST',
-                                headers: { Authorization: `Bearer ${auth.data.session?.access_token}` },
-                                body: formData
-                              })
-                              const json = await uploadRes.json()
-                              if (json.data) {
-                                setVaultDocuments([json.data, ...vaultDocuments])
-                                showToast("Document Uploaded & AI Analysis Started!")
-                              } else {
-                                showToast(json.error || "Upload failed", "error")
-                              }
-                            } catch (e) { showToast("Upload error.", "error") }
-                            finally { setIsUploadingDoc(false) }
-                          }}
-                        />
-                        <Button
-                          className="bg-sky-500 hover:bg-sky-400 text-white gap-2 shadow-lg shadow-sky-500/20"
-                          disabled={isUploadingDoc || !manageProp}
-                          onClick={() => document.getElementById('doc-upload')?.click()}
-                        >
-                          {isUploadingDoc ? <Activity className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-                          {isUploadingDoc ? 'Uploading...' : 'Upload Document'}
-                        </Button>
-                        {!manageProp && (
-                          <div className="absolute -bottom-8 right-0 text-[10px] text-amber-500 font-bold whitespace-nowrap animate-pulse">
-                            Select a property first
-                          </div>
-                        )}
-                      </div>
+                            const uploadRes = await fetch('/api/documents/upload', {
+                              method: 'POST',
+                              headers: { Authorization: `Bearer ${auth.data.session?.access_token}` },
+                              body: formData
+                            })
+                            const json = await uploadRes.json()
+                            if (json.data) {
+                              setVaultDocuments([json.data, ...vaultDocuments])
+                              showToast("Document Uploaded & AI Analysis Started!")
+                            } else {
+                              showToast(json.error || "Upload failed", "error")
+                            }
+                          } catch (e) { showToast("Upload error.", "error") }
+                          finally {
+                            setIsUploadingDoc(false)
+                            e.target.value = '' // Reset input
+                          }
+                        }}
+                      />
+                      <Button
+                        className="bg-sky-500 hover:bg-sky-400 text-white gap-2 shadow-lg shadow-sky-500/20"
+                        disabled={isUploadingDoc || (userRole === 'manager' && !vaultProp)}
+                        onClick={() => document.getElementById('doc-upload')?.click()}
+                      >
+                        {isUploadingDoc ? <Activity className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                        {isUploadingDoc ? 'Uploading...' : 'Upload'}
+                      </Button>
+                      {userRole === 'manager' && !vaultProp && (
+                        <div className="absolute -bottom-8 right-0 text-[10px] text-amber-500 font-bold whitespace-nowrap animate-pulse">
+                          Select building first
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
 
-                <div className="flex gap-2 bg-slate-900/40 p-1 rounded-xl border border-slate-700/50 w-fit">
-                  {['all', 'lease', 'insurance', 'permit', 'violation'].map(cat => (
-                    <Button
-                      key={cat}
-                      variant="ghost"
-                      size="sm"
-                      className={`text-xs px-4 rounded-lg capitalize ${docFilter === cat ? 'bg-sky-500/20 text-sky-400' : 'text-slate-500'}`}
-                      onClick={() => setDocFilter(cat)}
-                    >
-                      {cat}
-                    </Button>
-                  ))}
-                </div>
+                {/* SEARCH & CATEGORY FILTER BAR */}
+                <Card className="bg-slate-900/40 backdrop-blur-md border-slate-700/50">
+                  <CardContent className="p-4 flex flex-col md:flex-row gap-4">
+                    <div className="flex-1 relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                      <Input
+                        placeholder="Search document name or AI content..."
+                        className="pl-10 bg-slate-950 border-slate-800 focus:ring-sky-500"
+                        value={vaultSearch}
+                        onChange={(e) => setVaultSearch(e.target.value)}
+                      />
+                    </div>
+                    <div className="flex gap-2 bg-slate-950 p-1 rounded-lg border border-slate-800">
+                      {['all', 'lease', 'insurance', 'permit', 'violation'].map(cat => (
+                        <Button
+                          key={cat}
+                          variant="ghost"
+                          size="sm"
+                          className={`text-xs px-4 rounded-md capitalize ${docFilter === cat ? 'bg-sky-500/20 text-sky-400' : 'text-slate-500'}`}
+                          onClick={() => setDocFilter(cat)}
+                        >
+                          {cat}
+                        </Button>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
 
                 {vaultDocuments.length === 0 ? (
-                  <div className="p-20 text-center border-2 border-dashed border-slate-800/50 rounded-3xl bg-slate-900/20 backdrop-blur-md flex flex-col items-center justify-center">
-                    <div className="w-20 h-20 rounded-full bg-slate-800/30 flex items-center justify-center mb-6 border border-slate-700/50 shadow-inner">
-                      <FileText className="w-10 h-10 text-slate-600" />
-                    </div>
-                    <h3 className="text-xl font-bold text-slate-400 mb-2">
-                      {!manageProp ? "Select a property to view its vault" : "The Vault is Empty"}
-                    </h3>
-                    <p className="text-slate-600 max-w-sm mx-auto mb-8">
-                      {!manageProp
-                        ? "Select a property from the dropdown above to manage its compliance documents and AI-extracted data."
-                        : "Upload your first compliance document for this property to enable AI auto-extraction and expiry monitoring."}
+                  <div className="p-20 text-center border border-dashed border-slate-700/50 rounded-2xl bg-slate-900/20">
+                    <FileText className="w-12 h-12 mx-auto text-slate-700 mb-4" />
+                    <h3 className="text-xl font-bold text-white mb-2">Vault Empty</h3>
+                    <p className="text-slate-400 max-w-sm mx-auto mb-6">
+                      {userRole === 'manager' && !vaultProp ? "Select a building to view documents." : "Upload documents to start AI analysis."}
                     </p>
-                    {manageProp && (
-                      <Button variant="outline" className="border-slate-700/50 text-slate-400 hover:bg-slate-800" onClick={() => document.getElementById('doc-upload')?.click()}>
-                        <Plus className="w-4 h-4 mr-2" /> Start Uploading
-                      </Button>
-                    )}
+                  </div>
+                ) : filteredVaultDocuments.length === 0 ? (
+                  <div className="p-20 text-center border border-slate-700/50 rounded-2xl bg-slate-900/20">
+                    <Search className="w-12 h-12 mx-auto text-slate-700 mb-4" />
+                    <p className="text-slate-400">No documents match your search or filter.</p>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                    {vaultDocuments.filter(d => docFilter === 'all' || d.category === docFilter).map((doc: any) => (
-                      <Card key={doc.id} className="bg-slate-900/40 backdrop-blur-md border border-slate-700/50 group overflow-hidden hover:border-sky-500/30 transition-all cursor-pointer" onClick={() => setSelectedDoc(doc)}>
-                        <CardContent className="p-0">
-                          <div className="aspect-[16/9] bg-slate-800/50 relative flex items-center justify-center border-b border-slate-800">
-                            {doc.file_type?.includes('image') ? (
-                              <img src={doc.file_url} className="w-full h-full object-cover opacity-60" />
-                            ) : (
-                              <FileText className="w-10 h-10 text-slate-600" />
-                            )}
-                            <div className="absolute top-2 right-2 flex gap-2">
-                              <Badge className="bg-black/60 capitalize backdrop-blur-md border-0">{doc.category}</Badge>
-                              {doc.expires_at && (
-                                <Badge className={`${new Date(doc.expires_at) < new Date() ? 'bg-red-500' : 'bg-amber-500'} text-[10px]`}>
-                                  Exp: {new Date(doc.expires_at).toLocaleDateString()}
-                                </Badge>
-                              )}
-                            </div>
-                          </div>
-                          <div className="p-4">
-                            <div className="flex justify-between items-start gap-2">
-                              <h4 className="font-bold text-white truncate flex-1">{doc.file_name || 'Unnamed Document'}</h4>
-                              <span className="text-[10px] text-slate-500 whitespace-nowrap">{new Date(doc.created_at).toLocaleDateString()}</span>
-                            </div>
-                            <p className="text-xs text-slate-400 mt-2 line-clamp-2 min-h-[32px]">{doc.ai_summary || 'AI analysis in progress...'}</p>
-
-                            <div className="flex items-center gap-3 mt-4 pt-4 border-t border-slate-800/50">
-                              <div className="flex-1 flex gap-1">
-                                {!doc.ai_processed && <Activity className="w-3 h-3 text-sky-400 animate-spin" />}
-                                <span className="text-[10px] font-bold text-sky-400 uppercase tracking-widest">{doc.ai_processed ? 'AI Extracted' : 'Processing...'}</span>
-                              </div>
-                              <Button size="icon" variant="ghost" className="h-6 w-6 text-slate-500 hover:text-red-400" onClick={(e) => {
-                                e.stopPropagation()
-                                if (confirm("Delete this document permanently?")) {
-                                  // Call API
-                                  fetch(`/api/documents?id=${doc.id}`, { method: 'DELETE' })
-                                    .then(() => {
-                                      setVaultDocuments(prev => prev.filter(p => p.id !== doc.id))
-                                      showToast("Document removed.")
-                                    })
-                                }
-                              }}><Trash2 className="w-3 h-3" /></Button>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
+                  <div className="bg-slate-900/40 backdrop-blur-md border border-slate-700/50 rounded-xl overflow-hidden shadow-2xl">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left">
+                        <thead>
+                          <tr className="border-b border-slate-800/80 bg-slate-900/50">
+                            <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-widest">Document Name</th>
+                            <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-widest">Building / Category</th>
+                            <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-widest">AI Analysis</th>
+                            <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-widest">Uploaded At</th>
+                            <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-widest text-right">Action</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-800/50">
+                          {filteredVaultDocuments.map((doc: any) => (
+                            <tr key={doc.id} className="hover:bg-slate-800/30 transition-colors group">
+                              <td className="px-6 py-4">
+                                <div className="flex items-center gap-3">
+                                  <div className="w-10 h-10 rounded-lg bg-slate-800 flex items-center justify-center shrink-0">
+                                    {doc.file_type?.includes('pdf') ? <FileText className="w-5 h-5 text-red-400" /> : <FileText className="w-5 h-5 text-sky-400" />}
+                                  </div>
+                                  <div className="min-w-0">
+                                    <div className="text-sm font-bold text-white group-hover:text-sky-400 transition-colors truncate">{doc.file_name}</div>
+                                    <div className="text-[10px] text-slate-500 font-medium">ID: {String(doc.id).slice(0, 8)}</div>
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="px-6 py-4">
+                                <div className="text-sm text-slate-300 font-medium">
+                                  {properties.find(p => String(p.id) === String(doc.property_id))?.address || "Unassigned"}
+                                </div>
+                                <Badge className="mt-1 text-[9px] bg-slate-800 border-0 capitalize">{doc.category}</Badge>
+                              </td>
+                              <td className="px-6 py-4">
+                                {doc.ai_processed ? (
+                                  <div className="space-y-1">
+                                    <div className="text-[11px] text-emerald-400 font-bold flex items-center gap-1.5 whitespace-nowrap">
+                                      <ShieldCheck className="w-3 h-3" /> AI Analyzed
+                                    </div>
+                                    {doc.ai_analysis?.overall_summary && (
+                                      <div className="text-[10px] text-slate-500 line-clamp-1 italic">"{doc.ai_analysis.overall_summary}"</div>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <div className="text-[11px] text-sky-400 font-bold flex items-center gap-1.5">
+                                    <Activity className="w-3 h-3 animate-spin" /> Processing...
+                                  </div>
+                                )}
+                              </td>
+                              <td className="px-6 py-4">
+                                <div className="text-sm font-mono text-slate-400">{new Date(doc.created_at).toLocaleDateString()}</div>
+                              </td>
+                              <td className="px-6 py-4 text-right">
+                                <div className="flex justify-end gap-2">
+                                  <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-white" onClick={() => setSelectedDoc(doc)}>
+                                    <Activity className="w-4 h-4" />
+                                  </Button>
+                                  <Link href={doc.file_url} target="_blank">
+                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-sky-400 hover:text-white hover:bg-sky-500/20">
+                                      <Download className="w-4 h-4" />
+                                    </Button>
+                                  </Link>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
                 )}
               </div>
             )}
 
             {/* COMPLIANCE CALENDAR */}
+            {/* COMPLIANCE CALENDAR */}
             {activeTab === 'calendar' && (
               <div className="space-y-6">
-                <div className="flex justify-between items-start">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                   <div>
                     <h2 className="text-2xl font-bold flex items-center gap-2"><Calendar className="w-6 h-6 text-sky-400" /> Compliance Calendar</h2>
-                    <p className="text-muted-foreground mt-1">Track key deadlines for all major NYC local laws across your portfolio.</p>
+                    <p className="text-muted-foreground mt-1">Unified view of all NYC local law deadlines across your portfolio.</p>
                   </div>
                   {/* Upgrade Placeholder CTA */}
                   {(!userProfile?.membership_tier || userProfile.membership_tier === 'Free') && (
-                    <Button className="bg-indigo-500 hover:bg-indigo-500 text-white gap-2" onClick={() => {
-                      // Dummy handler for upgrade
-                      alert("This will redirect to Stripe Checkout to upgrade your tier to Growth ($29/mo).")
-                    }}>
-                      <ArrowUpCircle className="w-4 h-4" /> Unlock Growth Features
+                    <Button className="bg-indigo-500 hover:bg-indigo-600 text-white gap-2 shadow-lg shadow-indigo-500/20" onClick={() => setShowUpgradeModal(true)}>
+                      <ArrowUpCircle className="w-4 h-4" /> Unlock growth features
                     </Button>
                   )}
                 </div>
 
-                {properties.length === 0 ? (
-                  <div className="p-8 text-center bg-slate-900/40 backdrop-blur-md/50 border border-slate-700/50 rounded-xl relative overflow-hidden group">
-                    <Flame className="w-12 h-12 mx-auto text-zinc-700 mb-4 group-hover:text-slate-500 transition-colors" />
-                    <h3 className="text-xl font-bold text-white mb-2">No Properties Found</h3>
-                    <p className="text-slate-400 mb-6">Add a property to start tracking its NYC compliance deadlines (LL97, LL84, LL11, etc.).</p>
-                    <Button className="bg-indigo-500 text-white hover:bg-sky-400" onClick={() => setShowAddProperty(true)}>
-                      <Building2 className="w-4 h-4 mr-2" /> Add Your First Property
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {properties.map(p => (
-                      <Card key={p.id} className="bg-card/50 border-slate-700/50 flex flex-col">
-                        <CardHeader className="border-b border-slate-800/50 pb-4 bg-slate-900/40 backdrop-blur-md/30">
-                          <CardTitle className="text-lg flex items-center justify-between">
-                            <span className="truncate pr-4">{p.address}</span>
-                            <Badge variant="outline" className="shrink-0">{p.units} Units</Badge>
-                          </CardTitle>
-                        </CardHeader>
-                        <CardContent className="p-0 flex-1">
-                          <div className="divide-y divide-slate-800/50/50">
-                            {/* LL97 */}
-                            <div className="p-4 flex items-center justify-between hover:bg-slate-800/40/30 transition-colors">
-                              <div className="flex items-center gap-3">
-                                <div className="w-8 h-8 rounded-full bg-amber-500/20 flex items-center justify-center"><Flame className="w-4 h-4 text-amber-500" /></div>
-                                <div>
-                                  <div className="text-sm font-bold">LL97 (Carbon)</div>
-                                  <div className="text-xs text-slate-500">Report Due</div>
-                                </div>
-                              </div>
-                              <div className="text-right">
-                                <div className="text-sm font-bold text-white">May 1, 2025</div>
-                                <Badge variant="default" className="text-[10px] bg-red-500 mt-1">Action Req</Badge>
-                              </div>
-                            </div>
-                            {/* LL84 */}
-                            <div className="p-4 flex items-center justify-between hover:bg-slate-800/40/30 transition-colors">
-                              <div className="flex items-center gap-3">
-                                <div className="w-8 h-8 rounded-full bg-sky-400/20 flex items-center justify-center"><Zap className="w-4 h-4 text-sky-400" /></div>
-                                <div>
-                                  <div className="text-sm font-bold">LL84 (Energy)</div>
-                                  <div className="text-xs text-slate-500">Benchmarking</div>
-                                </div>
-                              </div>
-                              <div className="text-right">
-                                <div className="text-sm font-bold text-white">May 1, 2025</div>
-                                <Badge variant="outline" className="text-[10px] text-orange-400 border-amber-500/50 mt-1">Approaching</Badge>
-                              </div>
-                            </div>
-                            {/* LL11 */}
-                            <div className="p-4 flex items-center justify-between hover:bg-slate-800/40/30 transition-colors">
-                              <div className="flex items-center gap-3">
-                                <div className="w-8 h-8 rounded-full bg-purple-500/20 flex items-center justify-center"><Building2 className="w-4 h-4 text-purple-500" /></div>
-                                <div>
-                                  <div className="text-sm font-bold">LL11 (FISP)</div>
-                                  <div className="text-xs text-slate-500">Facade Inspect</div>
-                                </div>
-                              </div>
-                              <div className="text-right">
-                                <div className="text-sm font-bold text-slate-400">Cycle 10</div>
-                                <Badge variant="outline" className="text-[10px] text-slate-500 border-gray-700 mt-1">Pending Block</Badge>
-                              </div>
-                            </div>
-                            {/* LL152 */}
-                            <div className="p-4 flex items-center justify-between hover:bg-slate-800/40/30 transition-colors">
-                              <div className="flex items-center gap-3">
-                                <div className="w-8 h-8 rounded-full bg-zinc-700 flex items-center justify-center"><Scale className="w-4 h-4 text-gray-300" /></div>
-                                <div>
-                                  <div className="text-sm font-bold">LL152 (Gas)</div>
-                                  <div className="text-xs text-slate-500">Piping System</div>
-                                </div>
-                              </div>
-                              <div className="text-right">
-                                <div className="text-sm font-bold text-slate-400">Dec 31, 2025</div>
-                                <Badge variant="outline" className="text-[10px] text-slate-500 border-gray-700 mt-1">On Track</Badge>
-                              </div>
-                            </div>
-                          </div>
-                        </CardContent>
-                        {(!userProfile?.membership_tier || userProfile.membership_tier === 'Free') && (
-                          <div className="p-4 bg-indigo-500/10 border-t border-indigo-500/20 text-center">
-                            <p className="text-xs text-indigo-300 mb-2">Automated alerts available in Growth.</p>
-                            <Button size="sm" variant="outline" className="w-full border-indigo-500/50 text-indigo-400 hover:bg-indigo-500/20" onClick={() => alert("Upgrade to Growth to unlock automated D-30 and D-7 reminders via Email/SMS.")}>Enable Alerts</Button>
-                          </div>
-                        )}
-                      </Card>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* LL97 CARBON LAW SIMULATOR */}
-            {activeTab === 'll97' && (
-              <div className="space-y-6">
-                <div>
-                  <h2 className="text-2xl font-bold flex items-center gap-2"><Flame className="w-6 h-6 text-amber-500" /> LL97 Carbon Emissions Simulator</h2>
-                  <p className="text-muted-foreground mt-1">Estimate your building's compliance with NYC Local Law 97 (Climate Mobilization Act) and calculate potential penalties.</p>
-                </div>
-
-                {/* Input Form */}
-                <Card className="bg-card/50 border-slate-700/50">
-                  <CardHeader>
-                    <CardTitle className="text-lg">Building Information</CardTitle>
-                    <CardDescription>Enter details about your property to simulate LL97 compliance. Select an existing property or enter manually.</CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    {/* Quick select from existing properties */}
-                    {properties.length > 0 && (
-                      <div>
-                        <label className="text-xs text-slate-400 mb-1 block">Quick Select Property</label>
-                        <div className="flex flex-wrap gap-2">
-                          {properties.map(p => (
-                            <Button key={p.id} size="sm" variant="outline" className="text-xs border-slate-700/50 hover:border-sky-400 hover:text-sky-300" onClick={() => runLL97Simulation(p)}>
-                              <Building2 className="w-3 h-3 mr-1" /> {p.address}
-                            </Button>
-                          ))}
-                        </div>
+                {/* FILTER BAR */}
+                <Card className="bg-slate-900/40 backdrop-blur-md border-slate-700/50">
+                  <CardContent className="p-4">
+                    <div className="flex flex-col md:flex-row gap-4">
+                      <div className="flex-1 relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                        <Input
+                          placeholder="Search addresses..."
+                          className="pl-10 bg-slate-950 border-slate-800 focus:ring-sky-500"
+                          value={calSearch}
+                          onChange={(e) => setCalSearch(e.target.value)}
+                        />
                       </div>
-                    )}
-
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                      <div>
-                        <label className="text-xs text-slate-400 mb-1 block">Approx. Square Footage</label>
-                        <Input placeholder="e.g. 50000" value={ll97Props.squareFootage} onChange={e => setLl97Props({ ...ll97Props, squareFootage: e.target.value })} className="bg-slate-800/40 border-slate-600/50" />
-                      </div>
-                      <div>
-                        <label className="text-xs text-slate-400 mb-1 block">Primary Heating Fuel</label>
-                        <select className="w-full bg-slate-800/40 border border-slate-600/50 text-white rounded-md p-2 text-sm" value={ll97Props.heatingFuel} onChange={e => setLl97Props({ ...ll97Props, heatingFuel: e.target.value })}>
-                          <option value="Natural Gas">Natural Gas</option>
-                          <option value="#2 Fuel Oil">#2 Fuel Oil</option>
-                          <option value="#4 Fuel Oil">#4 Fuel Oil</option>
-                          <option value="Electric (Grid)">Electric (Grid)</option>
-                          <option value="Steam (District)">Steam (District)</option>
+                      <div className="flex gap-4">
+                        <select
+                          className="bg-slate-950 border border-slate-800 text-slate-300 text-sm rounded-md px-3 py-2 outline-none focus:ring-1 focus:ring-sky-500 min-w-[140px]"
+                          value={calCategoryFilter}
+                          onChange={(e) => setCalCategoryFilter(e.target.value)}
+                        >
+                          <option value="all">All Laws</option>
+                          <option value="LL97">LL97 (Carbon)</option>
+                          <option value="LL84">LL84 (Energy)</option>
+                          <option value="LL11">LL11 (Facade)</option>
+                          <option value="LL152">LL152 (Gas)</option>
                         </select>
-                      </div>
-                      <div>
-                        <label className="text-xs text-slate-400 mb-1 block">Building Type</label>
-                        <select className="w-full bg-slate-800/40 border border-slate-600/50 text-white rounded-md p-2 text-sm" value={ll97Props.buildingType} onChange={e => setLl97Props({ ...ll97Props, buildingType: e.target.value })}>
-                          <option value="Multifamily Residential">Multifamily Residential</option>
-                          <option value="Office">Office</option>
-                          <option value="Retail">Retail</option>
-                          <option value="Mixed Use">Mixed Use</option>
-                          <option value="Hotel">Hotel</option>
+                        <select
+                          className="bg-slate-950 border border-slate-800 text-slate-300 text-sm rounded-md px-3 py-2 outline-none focus:ring-1 focus:ring-sky-500 min-w-[140px]"
+                          value={calStatusFilter}
+                          onChange={(e) => setCalStatusFilter(e.target.value)}
+                        >
+                          <option value="all">All Status</option>
+                          <option value="Action Req">Action Required</option>
+                          <option value="Approaching">Approaching</option>
+                          <option value="On Track">On Track</option>
+                          <option value="Pending">Pending</option>
                         </select>
-                      </div>
-                      <div>
-                        <label className="text-xs text-slate-400 mb-1 block">Year Built</label>
-                        <Input placeholder="e.g. 1960" value={ll97Props.yearBuilt} onChange={e => setLl97Props({ ...ll97Props, yearBuilt: e.target.value })} className="bg-slate-800/40 border-slate-600/50" />
                       </div>
                     </div>
-
-                    <Button className="bg-orange-600 hover:bg-orange-700 text-white gap-2" onClick={() => runLL97Simulation(properties[0])} disabled={ll97Loading}>
-                      {ll97Loading ? <><Activity className="w-4 h-4 animate-spin" /> Simulating...</> : <><Flame className="w-4 h-4" /> Run LL97 Simulation</>}
-                    </Button>
                   </CardContent>
                 </Card>
 
-                {/* Results */}
-                {ll97Result && (
-                  <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
-                    {/* Status Banner */}
-                    <div className={`p-6 rounded-xl border ${ll97Result.risk_level === 'Critical' ? 'bg-red-500/10 border-red-500/30' : ll97Result.risk_level === 'High' ? 'bg-amber-500/10 border-amber-500/30' : ll97Result.risk_level === 'Medium' ? 'bg-amber-400/10 border-amber-400/30' : 'bg-emerald-500/10 border-emerald-500/30'}`}>
-                      <div className="flex items-center justify-between mb-3">
-                        <h3 className="text-xl font-bold flex items-center gap-2">
-                          {ll97Result.risk_level === 'Critical' || ll97Result.risk_level === 'High' ? <AlertTriangle className="w-6 h-6 text-red-500" /> : <CheckCircle className="w-6 h-6 text-emerald-500" />}
-                          {ll97Result.compliance_status}
-                        </h3>
-                        <Badge className={`text-sm px-3 py-1 ${ll97Result.risk_level === 'Critical' ? 'bg-red-500' : ll97Result.risk_level === 'High' ? 'bg-amber-500' : ll97Result.risk_level === 'Medium' ? 'bg-amber-400 text-black' : 'bg-emerald-500'}`}>
-                          {ll97Result.risk_level} Risk
-                        </Badge>
-                      </div>
-                      <p className="text-zinc-300">{ll97Result.summary}</p>
-                    </div>
-
-                    {/* Emission Stats */}
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                      <Card className="bg-slate-900/40 backdrop-blur-md border-slate-700/50"><CardContent className="p-4 text-center">
-                        <div className="text-3xl font-bold text-white mb-1">{ll97Result.estimated_emissions_tco2e}</div>
-                        <div className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">tCO₂e / Year</div>
-                      </CardContent></Card>
-                      <Card className="bg-slate-900/40 backdrop-blur-md border-slate-700/50"><CardContent className="p-4 text-center">
-                        <div className="text-3xl font-bold text-sky-300 mb-1">{ll97Result.phase1_limit_tco2e}</div>
-                        <div className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Phase 1 Limit (2024-29)</div>
-                      </CardContent></Card>
-                      <Card className="bg-slate-900/40 backdrop-blur-md border-slate-700/50"><CardContent className="p-4 text-center">
-                        <div className="text-3xl font-bold text-purple-400 mb-1">{ll97Result.phase2_limit_tco2e}</div>
-                        <div className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Phase 2 Limit (2030-34)</div>
-                      </CardContent></Card>
-                      <Card className="bg-slate-900/40 backdrop-blur-md border-slate-700/50"><CardContent className="p-4 text-center">
-                        <div className="text-3xl font-bold text-red-400 mb-1">{ll97Result.total_10yr_penalty_risk}</div>
-                        <div className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">10-Year Penalty Risk</div>
-                      </CardContent></Card>
-                    </div>
-
-                    {/* Annual Penalties */}
-                    <div className="grid grid-cols-2 gap-4">
-                      <Card className="bg-slate-900/40 backdrop-blur-md border-slate-700/50"><CardContent className="p-5">
-                        <div className="text-xs text-slate-500 uppercase font-bold tracking-wider mb-2">Phase 1 Annual Penalty (2024-2029)</div>
-                        <div className="text-2xl font-bold text-white">${ll97Result.phase1_penalty_annual?.toLocaleString() || '0'}</div>
-                        <div className="text-xs text-slate-400 mt-1">$268/ton over limit</div>
-                      </CardContent></Card>
-                      <Card className="bg-slate-900/40 backdrop-blur-md border-slate-700/50"><CardContent className="p-5">
-                        <div className="text-xs text-slate-500 uppercase font-bold tracking-wider mb-2">Phase 2 Annual Penalty (2030-2034)</div>
-                        <div className="text-2xl font-bold text-orange-400">${ll97Result.phase2_penalty_annual?.toLocaleString() || '0'}</div>
-                        <div className="text-xs text-slate-400 mt-1">Stricter limits apply</div>
-                      </CardContent></Card>
-                    </div>
-
-                    {/* Retrofit Recommendations */}
-                    {ll97Result.retrofits?.length > 0 && (
-                      <Card className="bg-slate-900/40 backdrop-blur-md border-slate-700/50">
-                        <CardHeader>
-                          <CardTitle className="text-lg flex items-center gap-2"><Wrench className="w-5 h-5 text-sky-400" /> Recommended Retrofits</CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-3">
-                          {ll97Result.retrofits.map((r: any, i: number) => (
-                            <div key={i} className="flex items-start gap-4 p-4 bg-slate-950 border border-slate-700/50 rounded-lg">
-                              <div className={`w-2 h-2 rounded-full mt-2 ${r.priority === 'High' ? 'bg-red-500' : r.priority === 'Medium' ? 'bg-amber-400' : 'bg-emerald-500'}`} />
-                              <div className="flex-1">
-                                <div className="font-bold text-white text-sm">{r.action}</div>
-                                <div className="text-xs text-slate-400 mt-1">Cost: {r.estimated_cost} • Emission Reduction: {r.emission_reduction_pct}% • Payback: {r.payback_years} years</div>
-                              </div>
-                              <Badge variant="outline" className={`shrink-0 text-[10px] ${r.priority === 'High' ? 'text-red-400 border-red-500/30' : 'text-emerald-400 border-emerald-500/30'}`}>{r.priority}</Badge>
-                            </div>
+                {properties.length === 0 ? (
+                  <div className="p-20 text-center bg-slate-900/40 backdrop-blur-md/50 border border-dashed border-slate-700/50 rounded-2xl">
+                    <HistoryIcon className="w-12 h-12 mx-auto text-slate-700 mb-4" />
+                    <h3 className="text-xl font-bold text-white mb-2">Portfolio Empty</h3>
+                    <p className="text-slate-400 mb-6 max-w-sm mx-auto">Add properties to start tracking their NYC compliance deadlines in a unified view.</p>
+                    <Button className="bg-sky-500 hover:bg-sky-400" onClick={() => setShowAddProperty(true)}>Add Property</Button>
+                  </div>
+                ) : groupedCalendar.length === 0 ? (
+                  <div className="p-20 text-center bg-slate-900/20 border border-slate-800 rounded-2xl">
+                    <Filter className="w-10 h-10 mx-auto text-slate-700 mb-4" />
+                    <p className="text-slate-500">No properties match your current filters.</p>
+                    <Button variant="link" className="text-sky-400 mt-2" onClick={() => { setCalSearch(""); setCalCategoryFilter("all"); setCalStatusFilter("all"); }}>Clear Filters</Button>
+                  </div>
+                ) : (
+                  <div className="bg-slate-900/40 backdrop-blur-md border border-slate-700/50 rounded-xl overflow-hidden shadow-2xl">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left">
+                        <thead>
+                          <tr className="border-b border-slate-800/80 bg-slate-900/50">
+                            <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-widest">Building Address</th>
+                            <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-widest">Compliance Matrix</th>
+                            <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-widest">Next Deadline</th>
+                            <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-widest">Primary Status</th>
+                            <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-widest text-right">Action</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-800/50">
+                          {groupedCalendar.map((group: any) => (
+                            <tr key={group.property.id} className="hover:bg-slate-800/30 transition-colors group">
+                              <td className="px-6 py-4">
+                                <div className="text-sm font-bold text-white group-hover:text-sky-400 transition-colors">{group.property.address}</div>
+                                <div className="text-[10px] text-slate-600 font-mono mt-0.5">{group.property.borough.toUpperCase()} • {group.property.units} UNITS</div>
+                              </td>
+                              <td className="px-6 py-4">
+                                <div className="flex items-center gap-2">
+                                  {group.allLaws.map((ev: any) => (
+                                    <div
+                                      key={ev.law}
+                                      className={`group/law relative px-2.5 py-1.5 rounded-lg border flex items-center gap-2 transition-all ${group.filteredEvents.find((fe: any) => fe.law === ev.law) ? 'opacity-100 scale-100 shadow-lg' : 'opacity-20 scale-90 grayscale'} ${ev.status === 'Action Req' ? 'bg-red-500/10 border-red-500/50' : ev.status === 'Approaching' ? 'bg-amber-500/10 border-amber-500/50' : 'bg-slate-800/50 border-slate-700'}`}
+                                      title={`${ev.law}: ${ev.status}`}
+                                    >
+                                      {ev.icon === 'Flame' && <Flame className={`w-3.5 h-3.5 ${ev.status === 'Action Req' ? 'text-red-500' : ev.status === 'Approaching' ? 'text-amber-500' : 'text-slate-400'}`} />}
+                                      {ev.icon === 'Zap' && <Zap className={`w-3.5 h-3.5 ${ev.status === 'Action Req' ? 'text-red-500' : ev.status === 'Approaching' ? 'text-amber-500' : 'text-slate-400'}`} />}
+                                      {ev.icon === 'Building2' && <Building2 className={`w-3.5 h-3.5 ${ev.status === 'Action Req' ? 'text-red-500' : ev.status === 'Approaching' ? 'text-amber-500' : 'text-slate-400'}`} />}
+                                      {ev.icon === 'Scale' && <Scale className={`w-3.5 h-3.5 ${ev.status === 'Action Req' ? 'text-red-500' : ev.status === 'Approaching' ? 'text-amber-500' : 'text-slate-400'}`} />}
+                                      <span className="text-[9px] font-bold text-slate-300">{ev.law}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </td>
+                              <td className="px-6 py-4">
+                                <div className="text-sm font-mono text-white flex items-center gap-2">
+                                  {group.primaryEvent.status === 'Action Req' && <AlertTriangle className="w-3 h-3 text-red-500 animate-pulse" />}
+                                  {group.primaryEvent.deadline}
+                                </div>
+                                <div className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mt-0.5">{group.primaryEvent.law} • {group.primaryEvent.category}</div>
+                              </td>
+                              <td className="px-6 py-4">
+                                {calCategoryFilter === 'all' ? (
+                                  <div className="flex flex-col gap-1">
+                                    {group.criticalCount > 0 && (
+                                      <Badge className="bg-red-500/20 text-red-400 border-red-500/30 text-[9px] px-1.5 py-0">
+                                        {group.criticalCount} Critical {group.criticalCount > 1 ? 'Laws' : 'Law'}
+                                      </Badge>
+                                    )}
+                                    {group.warningCount > 0 && (
+                                      <Badge className="bg-amber-500/20 text-amber-500 border-amber-500/30 text-[9px] px-1.5 py-0">
+                                        {group.warningCount} Warning
+                                      </Badge>
+                                    )}
+                                    {group.criticalCount === 0 && group.warningCount === 0 && (
+                                      <Badge className="bg-slate-800 text-slate-500 border-0 text-[10px] px-1.5 py-0">All On Track</Badge>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <Badge className={`text-[10px] ${group.primaryEvent.status === 'Action Req' ? 'bg-red-500' : group.primaryEvent.status === 'Approaching' ? 'bg-amber-500' : 'bg-slate-800'} border-0`}>
+                                    {group.primaryEvent.status}
+                                  </Badge>
+                                )}
+                              </td>
+                              <td className="px-6 py-4 text-right">
+                                <Button variant="ghost" size="sm" className="text-sky-400 hover:text-white hover:bg-sky-500/20 gap-2" onClick={() => setManageProp(group.property)}>
+                                  View Details <ArrowRight className="w-3 h-3" />
+                                </Button>
+                              </td>
+                            </tr>
                           ))}
-                        </CardContent>
-                      </Card>
-                    )}
-
-                    {/* Timeline */}
-                    {ll97Result.compliance_timeline && (
-                      <div className="p-4 bg-blue-900/10 border border-sky-400/20 rounded-xl">
-                        <div className="flex items-center gap-2 text-sky-300 font-bold text-sm mb-1"><Clock className="w-4 h-4" /> Compliance Timeline</div>
-                        <p className="text-zinc-300 text-sm">{ll97Result.compliance_timeline}</p>
-                      </div>
-                    )}
-                  </motion.div>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
                 )}
               </div>
             )}
+
+
 
             {/* LL97 SIMULATOR TAB */}
             {activeTab === 'll97' && (
               <div className="space-y-6 max-w-5xl">
                 <div className="flex justify-between items-start">
                   <div>
-                    <h2 className="text-2xl font-bold flex items-center gap-2 text-emerald-400"><Leaf className="w-6 h-6" /> Local Law 97 Simulator</h2>
+                    <h2 className="text-2xl font-bold flex items-center gap-2 text-emerald-400"><Leaf className="w-6 h-6" /> Local Law 97 Carbon Simulator</h2>
                     <p className="text-muted-foreground mt-1">Estimate carbon emissions, visualize penalty timelines, and discover ROI for green retrofits.</p>
                   </div>
                 </div>
@@ -3896,6 +3884,20 @@ export default function APP_ROOT() {
                         <CardTitle className="text-lg text-white">Building Profile</CardTitle>
                       </CardHeader>
                       <CardContent className="space-y-4">
+                        {/* Quick select from existing properties */}
+                        {properties.length > 0 && (
+                          <div className="pb-4 border-b border-slate-800/50">
+                            <label className="text-xs text-slate-400 mb-2 block font-bold uppercase tracking-wider">Quick Select</label>
+                            <div className="flex flex-wrap gap-2">
+                              {properties.slice(0, 5).map(p => (
+                                <Button key={p.id} size="sm" variant="outline" className="text-[10px] h-7 border-slate-700/50 hover:border-emerald-400 hover:text-emerald-400 bg-slate-950/50" onClick={() => runLL97Simulation(p)}>
+                                  <Building2 className="w-3 h-3 mr-1" /> {p.address.split(',')[0]}
+                                </Button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
                         <div className="space-y-2">
                           <label className="text-xs font-bold text-slate-400 uppercase">Property Address *</label>
                           <Input placeholder="e.g. 123 Broadway, NY" className="bg-slate-950 border-slate-700/50 text-white" value={ll97Props.address} onChange={e => setLl97Props({ ...ll97Props, address: e.target.value })} />
@@ -3928,7 +3930,7 @@ export default function APP_ROOT() {
                             <option>Mixed Use</option>
                           </select>
                         </div>
-                        <Button className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold h-10 mt-2" onClick={() => runLL97Simulation()} disabled={ll97Loading}>
+                        <Button className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold h-10 mt-2 shadow-lg shadow-emerald-500/20" onClick={() => runLL97Simulation()} disabled={ll97Loading}>
                           {ll97Loading ? <><Zap className="w-4 h-4 mr-2 animate-pulse" /> Analyzing Emissions Data...</> : <><Activity className="w-4 h-4 mr-2" /> Run AI Simulation</>}
                         </Button>
                       </CardContent>
@@ -4534,9 +4536,14 @@ export default function APP_ROOT() {
                               if (json.data) {
                                 setVaultDocuments([json.data, ...vaultDocuments])
                                 showToast("Document Uploaded!")
+                              } else {
+                                showToast(json.error || "Upload failed", "error")
                               }
                             } catch (e) { showToast("Upload error", "error") }
-                            finally { setIsUploadingDoc(false) }
+                            finally {
+                              setIsUploadingDoc(false)
+                              e.target.value = '' // Reset input
+                            }
                           }}
                         />
                         <Button

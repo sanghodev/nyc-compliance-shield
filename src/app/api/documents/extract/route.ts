@@ -47,18 +47,49 @@ export async function POST(request: NextRequest) {
     }
 
     const { document_id, file_url, file_type, category, file_name } = body
+    console.log("Starting extraction for doc:", document_id, "URL:", file_url)
     if (!document_id || !file_url) {
+        console.error("Missing doc info for extraction")
         return NextResponse.json({ error: 'Missing document_id or file_url' }, { status: 400 })
     }
 
     try {
-        // Fetch file from storage URL
-        const fileRes = await fetch(file_url)
-        if (!fileRes.ok) throw new Error('Could not fetch document file')
-        const fileBuffer = await fileRes.arrayBuffer()
+        // Derive path from URL safely
+        let bucket = 'document-vault'
+        let storagePath = ''
+
+        if (file_url.includes('/' + bucket + '/')) {
+            storagePath = file_url.split('/' + bucket + '/')[1].split('?')[0] // handle potential query params
+        }
+
+        let fileBuffer: ArrayBuffer
+        if (storagePath) {
+            console.log("Downloading from storage:", bucket, storagePath)
+            const { data, error: downloadError } = await supabaseAdmin.storage
+                .from(bucket)
+                .download(storagePath)
+
+            if (downloadError || !data) {
+                console.error("Storage download failed:", downloadError)
+                throw new Error('Could not download document from storage: ' + (downloadError?.message || 'Empty data'))
+            }
+            fileBuffer = await data.arrayBuffer()
+        } else {
+            console.log("Fallback fetching from URL:", file_url)
+            const fileRes = await fetch(file_url)
+            if (!fileRes.ok) throw new Error('Could not fetch document file via URL (' + fileRes.status + ')')
+            fileBuffer = await fileRes.arrayBuffer()
+        }
+
         const base64Content = Buffer.from(fileBuffer).toString('base64')
 
-        const mimeType = file_type || 'application/pdf'
+        let mimeType = file_type || 'application/pdf'
+        // Gemini handles PDF and common images. For RTF, it might fail in inlineData.
+        if (file_name?.toLowerCase().endsWith('.rtf')) {
+            mimeType = 'application/rtf' // Try this, but Gemini might reject
+        }
+
+        console.log("Using mimeType:", mimeType, "for AI extraction of", file_name)
         const ai = new GoogleGenAI({ apiKey })
 
         const response = await ai.models.generateContent({
@@ -73,6 +104,7 @@ export async function POST(request: NextRequest) {
             ],
             config: { responseMimeType: 'application/json' },
         })
+        console.log("AI response received for doc:", document_id)
 
         let extracted: any = {}
         try {
@@ -114,13 +146,15 @@ export async function POST(request: NextRequest) {
             .update(updateData)
             .eq('id', document_id)
 
+        console.log("Extraction complete and DB updated for doc:", document_id)
         return NextResponse.json({ data: { document_id, extracted } })
 
     } catch (e: any) {
+        console.error("Extraction error for doc:", document_id, e.message)
         // Mark as processed even if failed to avoid infinite retries
         await supabaseAdmin
             .from('documents')
-            .update({ ai_processed: true, ai_summary: 'AI analysis failed.' })
+            .update({ ai_processed: true, ai_summary: 'AI analysis failed: ' + e.message })
             .eq('id', document_id)
 
         return NextResponse.json({ error: e.message }, { status: 500 })

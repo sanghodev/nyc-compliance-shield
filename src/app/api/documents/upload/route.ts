@@ -17,6 +17,7 @@ export async function POST(request: NextRequest) {
         process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
         { global: { headers: { Authorization: authHeader } } }
     )
+    console.log("Upload API Runtime URL:", process.env.NEXT_PUBLIC_SUPABASE_URL)
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
@@ -56,6 +57,28 @@ export async function POST(request: NextRequest) {
     const storagePath = `${user.id}/${propertyId}/${timestamp}_${safeFileName}`
 
     const fileBytes = await file.arrayBuffer()
+
+    // Ensure bucket exists
+    try {
+        const { data: buckets, error: listError } = await supabaseAdmin.storage.listBuckets()
+        if (listError) {
+            console.error("CRITICAL: listBuckets failed:", listError)
+        } else {
+            console.log("Runtime Buckets:", buckets?.map(b => b.id))
+            if (!buckets?.find(b => b.id === 'document-vault')) {
+                console.log("Bucket 'document-vault' missing. Attempting creation...")
+                const { error: createError } = await supabaseAdmin.storage.createBucket('document-vault', {
+                    public: true,
+                    fileSizeLimit: 52428800, // 50MB
+                })
+                if (createError) console.error("Bucket creation failed:", createError)
+                else console.log("Bucket 'document-vault' created successfully.")
+            }
+        }
+    } catch (e) {
+        console.error("Unexpected error in bucket check:", e)
+    }
+
     const { error: storageError } = await supabaseAdmin.storage
         .from('document-vault')
         .upload(storagePath, fileBytes, {
@@ -64,7 +87,11 @@ export async function POST(request: NextRequest) {
         })
 
     if (storageError) {
-        return NextResponse.json({ error: storageError.message }, { status: 500 })
+        console.error("UPLOAD PROCESS FAILED:", storageError)
+        return NextResponse.json({
+            error: `Storage Error: ${storageError.message}`,
+            details: storageError
+        }, { status: 500 })
     }
 
     // Get public URL
@@ -97,7 +124,10 @@ export async function POST(request: NextRequest) {
 
     // Trigger AI extraction asynchronously (don't await, return doc immediately)
     // The AI extraction will update the document in the background
-    fetch(`${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/api/documents/extract`, {
+    const extractUrl = `${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/api/documents/extract`
+    console.log("Triggering extraction at:", extractUrl, "for doc:", doc.id)
+
+    fetch(extractUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: authHeader },
         body: JSON.stringify({
@@ -107,7 +137,12 @@ export async function POST(request: NextRequest) {
             category,
             file_name: file.name,
         }),
-    }).catch(() => {/* fire and forget */ })
+    }).then(res => {
+        if (!res.ok) console.error("Extraction trigger failed status:", res.status)
+        else console.log("Extraction triggered successfully for doc:", doc.id)
+    }).catch(err => {
+        console.error("Extraction trigger fetch error:", err.message)
+    })
 
     return NextResponse.json({ data: doc, message: 'File uploaded. AI analysis starting...' })
 }
