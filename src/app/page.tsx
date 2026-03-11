@@ -103,20 +103,14 @@ interface Contractor {
   reviews?: number
   verified?: boolean
   company_name?: string
-  phone?: string
-  email?: string
 }
-
-
 
 interface TenantRequest {
   id: number
   tenantName: string
-  tenant_name?: string
   unit: string
   issue: string
   description?: string
-  desc?: string
   type: string
   status: string
   date?: string
@@ -1250,7 +1244,7 @@ export default function APP_ROOT() {
   // Admin Data
   const [users, setUsers] = useState<UserProfile[]>([])
 
-  // LL97 Simulator State
+  // LL97 Simulator State (Dashboard Context)
   const [ll97Props, setLl97Props] = useState({ address: '', squareFootage: '', heatingFuel: 'Natural Gas', buildingType: 'Multifamily Residential', yearBuilt: '' })
   const [ll97Result, setLl97Result] = useState<any>(null)
   const [ll97Loading, setLl97Loading] = useState(false)
@@ -1612,6 +1606,12 @@ export default function APP_ROOT() {
         const bblFilter = currentBbl ? `&bbl=${currentBbl}` : ''
 
         // HPD Violations dataset (wvxf-dwi5) supports BIN but NOT BBL directly
+        vioUrl = `https://data.cityofnewyork.us/resource/wvxf-dwi5.json?$limit=50&$order=novissueddate DESC&violationstatus=Open${binFilter}`
+        // 311 Complaints (erm2-nwe9) supports BBL
+        compUrl = `https://data.cityofnewyork.us/resource/erm2-nwe9.json?$limit=50&$order=created_date DESC${bblFilter || binFilter}`
+        // Litigations (59kj-x8nc) supports BIN
+        litUrl = `https://data.cityofnewyork.us/resource/59kj-x8nc.json?$limit=50&$order=caseopendate DESC${binFilter}`
+
         // Registrations (tesw-yqqr) supports BIN
         regUrl = `https://data.cityofnewyork.us/resource/tesw-yqqr.json?$limit=1&$order=lastregistrationdate DESC${binFilter}`
         // Fee Charges (cp6j-7bjj) - some fields like bbl require $where for filtering
@@ -2766,7 +2766,7 @@ export default function APP_ROOT() {
                                       setProperties(properties.filter(p => p.manager_id !== u.id));
                                       setContractors(contractors.filter(c => (c as any).manager_id !== u.id));
                                       const managerPropertyIds = properties.filter(p => p.manager_id === u.id).map(p => p.id);
-                                      setRequests(requests.filter(req => !managerPropertyIds.includes(req.property_id) && req.tenant_id !== u.id));
+                                      setRequests(requests.filter(req => (!req.property_id || !managerPropertyIds.includes(req.property_id)) && req.tenant_id !== u.id));
                                       showToast("User and all associated data deleted successfully.");
                                       setDeleteConfirmOpen(false)
                                       setDeleteConfirmText("")
@@ -3278,7 +3278,7 @@ export default function APP_ROOT() {
             { id: 'contractors', icon: HardHat, label: 'Contractor Network' },
             { id: 'settings', icon: Settings, label: 'Settings' }
           ].filter(i => {
-            if (i.id === 'manager_tenants' || i.id === 'requests') return userRole === 'manager' || userRole === 'admin'
+            if (i.id === 'manager_tenants' || i.id === 'requests') return (userRole as string) === 'manager' || (userRole as string) === 'admin'
             return true
           }).map(i => (
             <button
@@ -3584,30 +3584,30 @@ export default function APP_ROOT() {
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 gap-8">
-                    {complianceResolutions.map((res: any) => (
-                      <Card key={res.id} className="bg-slate-900/40 backdrop-blur-md border border-slate-700/50 overflow-hidden">
+                    {complianceResolutions.map((resolution: any) => (
+                      <Card key={resolution.id} className="bg-slate-900/40 backdrop-blur-md border border-slate-700/50 overflow-hidden">
                         <div className="flex flex-col lg:flex-row">
                           {/* Sidebar Info */}
                           <div className="w-full lg:w-72 bg-black/20 border-r border-slate-800/50 p-6">
                             <div className="flex items-center gap-2 mb-4">
-                              <Badge className={`${res.violation_class === 'C' ? 'bg-red-500' : res.violation_class === 'B' ? 'bg-amber-500' : 'bg-sky-500'}`}>Class {res.violation_class}</Badge>
-                              <Badge variant="outline" className="border-slate-700 text-slate-400">ID: {res.violation_id}</Badge>
+                              <Badge className={`${resolution.violation_class === 'C' ? 'bg-red-500' : resolution.violation_class === 'B' ? 'bg-amber-500' : 'bg-sky-500'}`}>Class {resolution.violation_class}</Badge>
+                              <Badge variant="outline" className="border-slate-700 text-slate-400">ID: {resolution.violation_id}</Badge>
                             </div>
-                            <h3 className="text-lg font-bold text-white mb-2">{res.violation_description}</h3>
+                            <h3 className="text-lg font-bold text-white mb-2">{resolution.violation_description}</h3>
                             <div className="space-y-4 mt-6">
                               <div>
                                 <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Risk Score</label>
                                 <div className="flex items-center gap-2 mt-1">
                                   <div className="flex-1 h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                                    <div className="h-full bg-purple-500 rounded-full" style={{ width: `${res.ai_risk_score}%` }}></div>
+                                    <div className="h-full bg-purple-500 rounded-full" style={{ width: `${resolution.ai_risk_score}%` }}></div>
                                   </div>
-                                  <span className="text-sm font-bold text-purple-400">{res.ai_risk_score}</span>
+                                  <span className="text-sm font-bold text-purple-400">{resolution.ai_risk_score}</span>
                                 </div>
                               </div>
                               <div>
                                 <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Status</label>
                                 <div className="mt-1">
-                                  <Badge className={res.overall_status === 'resolved' ? 'bg-emerald-500' : 'bg-sky-500'}>{res.overall_status?.replace('_', ' ')}</Badge>
+                                  <Badge className={resolution.overall_status === 'resolved' ? 'bg-emerald-500' : 'bg-sky-500'}>{resolution.overall_status?.replace('_', ' ')}</Badge>
                                 </div>
                               </div>
                               <div className="p-3 bg-purple-900/10 border border-purple-500/20 rounded-lg">
@@ -3622,7 +3622,7 @@ export default function APP_ROOT() {
                               <HistoryIcon className="w-4 h-4 text-purple-400" /> AI Action Plan Steps
                             </h4>
                             <div className="relative space-y-6 before:absolute before:left-[11px] before:top-2 before:bottom-2 before:w-[1px] before:bg-slate-800">
-                              {res.ai_action_plan?.map((step: any, idx: number) => (
+                              {resolution.ai_action_plan?.map((step: any, idx: number) => (
                                 <div key={idx} className="relative pl-8 group">
                                   <div className={`absolute left-0 top-1 w-6 h-6 rounded-full border-2 border-slate-900 z-10 flex items-center justify-center text-[10px] font-bold ${step.status === 'done' ? 'bg-emerald-500 text-white' : 'bg-slate-800 text-slate-400 group-hover:bg-purple-500 group-hover:text-white transition-colors'}`}>
                                     {step.status === 'done' ? <Check className="w-3 h-3" /> : idx + 1}
@@ -3646,16 +3646,16 @@ export default function APP_ROOT() {
                                             setIsGeneratingStepDoc(true)
                                             try {
                                               const auth = await supabase.auth.getSession()
-                                              const res = await fetch('/api/compliance-autopilot/generate-doc', {
+                                              const docGenRes = await fetch('/api/compliance-autopilot/generate-doc', {
                                                 method: 'POST',
                                                 headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${auth.data.session?.access_token}` },
                                                 body: JSON.stringify({
-                                                  resolution_id: res.id,
+                                                  resolution_id: resolution.id,
                                                   step_index: idx,
                                                   property_id: manageProp.id
                                                 })
                                               })
-                                              const json = await res.json()
+                                              const json = await docGenRes.json()
                                               if (json.data) {
                                                 setShowDocPreview(json.data)
                                                 // Refresh resolutions to show 'Mark Done' or linked doc
@@ -3676,7 +3676,7 @@ export default function APP_ROOT() {
                                           className="text-xs border-sky-500/30 text-sky-400 hover:bg-sky-500/10 h-7"
                                           disabled={isMatchingPro}
                                           onClick={async () => {
-                                            setActiveAutopilotStep({ ...step, resId: res.id, idx })
+                                            setActiveAutopilotStep({ ...step, resId: resolution.id, idx })
                                             setIsMatchingPro(true)
                                             try {
                                               const resMatch = await fetch(`/api/compliance-autopilot/match-contractor?category=${step.category}&borough=${manageProp.borough}`)
@@ -3699,11 +3699,11 @@ export default function APP_ROOT() {
                                           const upRes = await fetch('/api/compliance-autopilot', {
                                             method: 'PATCH',
                                             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${auth.data.session?.access_token}` },
-                                            body: JSON.stringify({ resolution_id: res.id, step_index: idx, step_status: nextStatus })
+                                            body: JSON.stringify({ resolution_id: resolution.id, step_index: idx, step_status: nextStatus })
                                           })
                                           const upJson = await upRes.json()
                                           if (upJson.data) {
-                                            setComplianceResolutions(prev => prev.map(p => p.id === res.id ? upJson.data : p))
+                                            setComplianceResolutions(prev => prev.map(p => p.id === resolution.id ? upJson.data : p))
                                             showToast(`Step "${step.title}" marked as ${nextStatus}`)
                                           }
                                         }}
@@ -3808,34 +3808,6 @@ export default function APP_ROOT() {
                   </div>
                 </div>
 
-                {/* SEARCH & CATEGORY FILTER BAR */}
-                <Card className="bg-slate-900/40 backdrop-blur-md border-slate-700/50">
-                  <CardContent className="p-4 flex flex-col md:flex-row gap-4">
-                    <div className="flex-1 relative">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-                      <Input
-                        placeholder="Search document name or AI content..."
-                        className="pl-10 bg-slate-950 border-slate-800 focus:ring-sky-500"
-                        value={vaultSearch}
-                        onChange={(e) => setVaultSearch(e.target.value)}
-                      />
-                    </div>
-                    <div className="flex gap-2 bg-slate-950 p-1 rounded-lg border border-slate-800">
-                      {['all', 'lease', 'insurance', 'permit', 'violation'].map(cat => (
-                        <Button
-                          key={cat}
-                          variant="ghost"
-                          size="sm"
-                          className={`text-xs px-4 rounded-md capitalize ${docFilter === cat ? 'bg-sky-500/20 text-sky-400' : 'text-slate-500'}`}
-                          onClick={() => setDocFilter(cat)}
-                        >
-                          {cat}
-                        </Button>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
-
                 {vaultDocuments.length === 0 ? (
                   <div className="p-20 text-center border border-dashed border-slate-700/50 rounded-2xl bg-slate-900/20">
                     <FileText className="w-12 h-12 mx-auto text-slate-700 mb-4" />
@@ -3903,7 +3875,7 @@ export default function APP_ROOT() {
                               </td>
                               <td className="px-6 py-4 text-right">
                                 <div className="flex justify-end gap-2">
-                                  {userProfile?.membership_tier === 'Growth' || userProfile?.membership_tier === 'Business' || userRole === 'admin' ? (
+                                  {(userProfile?.membership_tier === 'Growth' || userProfile?.membership_tier === 'Business' || (userRole as string) === 'admin') ? (
                                     <Button
                                       variant="ghost"
                                       size="icon"
@@ -4623,7 +4595,15 @@ export default function APP_ROOT() {
                           )}
                         </div>
 
-                        <Button className="w-full bg-indigo-500 hover:bg-blue-700 text-white gap-2" onClick={() => { setActiveTab('ll97'); setManageProp(null); runLL97Simulation(manageProp); }} disabled={ll97Loading}>
+                        <Button
+                          className="w-full bg-indigo-500 hover:bg-blue-700 text-white gap-2"
+                          onClick={() => {
+                            setActiveTab('ll97');
+                            setManageProp(null);
+                            if (manageProp) runLL97Simulation(manageProp);
+                          }}
+                          disabled={ll97Loading}
+                        >
                           <Flame className="w-4 h-4" /> Run LL97 Simulation
                         </Button>
 
@@ -5067,7 +5047,7 @@ export default function APP_ROOT() {
 
               <div className="bg-slate-950 p-4 rounded-md border border-slate-700/50 text-sm text-gray-300">
                 <strong>Description:</strong><br />
-                {selectedRequest.desc || selectedRequest.description || 'No description provided.'}
+                {selectedRequest.description || 'No description provided.'}
               </div>
 
               <div className="space-y-4 border-t border-slate-700/50 pt-4">

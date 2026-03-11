@@ -9,9 +9,10 @@ const supabaseAdmin = createClient(
 // POST /api/contractors/[id]/review — Submit a review
 export async function POST(
     request: NextRequest,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
-    const contractorId = parseInt(params.id)
+    const { id } = await params
+    const contractorId = parseInt(id)
     if (isNaN(contractorId)) {
         return NextResponse.json({ error: 'Invalid contractor ID' }, { status: 400 })
     }
@@ -59,9 +60,10 @@ export async function POST(
 // PATCH /api/contractors/[id] — Admin: approve/suspend
 export async function PATCH(
     request: NextRequest,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
-    const contractorId = parseInt(params.id)
+    const { id } = await params
+    const contractorId = parseInt(id)
 
     const authHeader = request.headers.get('authorization')
     if (!authHeader) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
