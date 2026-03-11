@@ -147,6 +147,22 @@ export async function POST(request: NextRequest) {
             .eq('id', document_id)
 
         console.log("Extraction complete and DB updated for doc:", document_id)
+
+        // NEW: Trigger vector indexing for RAG (Growth Plan check handled in indexing route)
+        try {
+            const host = request.headers.get('host')
+            const protocol = request.headers.get('x-forwarded-proto') || 'http'
+            const baseUrl = `${protocol}://${host}`
+
+            fetch(`${baseUrl}/api/documents/index`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ document_id })
+            }).catch(e => console.error("Indexing trigger failed (async):", e))
+        } catch (e) {
+            console.error("Indexing trigger error:", e)
+        }
+
         return NextResponse.json({ data: { document_id, extracted } })
 
     } catch (e: any) {

@@ -75,3 +75,72 @@ Format your response strictly as valid JSON with the following structure:
         }
     }
 }
+export async function getEmbeddings(text: string): Promise<number[]> {
+    const apiKey = process.env.GEMINI_API_KEY
+    if (!apiKey) throw new Error('GEMINI_API_KEY is not configured')
+
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key=${apiKey}`
+    const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            model: "models/text-embedding-004",
+            content: { parts: [{ text }] }
+        })
+    })
+
+    if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(`Embedding failed: ${res.status} ${JSON.stringify(errorData)}`);
+    }
+
+    const json = await res.json()
+    return json.embedding.values
+}
+
+const PERSONA_PROMPTS = {
+    legal: `You are an elite NYC Housing Court Attorney. 
+You specialize in NYC Multiple Dwelling Law (MDL), HPD/DOB compliance, and complex lease disputes. 
+Your tone is professional, authoritative, and focused on risk mitigation.`,
+    real_estate: `You are a top-tier NYC Property Management Strategist. 
+You focus on operational efficiency, building maintenance trends (LL97, LL84), and tenant satisfaction. 
+Your tone is analytical, forward-thinking, and business-oriented.`,
+    tax: `You are a NYC Building Tax Specialist. 
+You are an expert on NYC Department of Finance (DOF) assessments, property tax exemptions (421-a, J-51), and PILOT programs. 
+Your tone is precise, detailed, and data-driven.`
+}
+
+export async function askSpecializedAgent(
+    type: 'legal' | 'real_estate' | 'tax',
+    query: string,
+    context: string = "",
+    isPremium: boolean = false
+): Promise<string> {
+    const apiKey = process.env.GEMINI_API_KEY
+    if (!apiKey) throw new Error('GEMINI_API_KEY is not configured')
+
+    const ai = new GoogleGenAI({ apiKey })
+    const persona = PERSONA_PROMPTS[type] || PERSONA_PROMPTS.legal
+
+    let fullPrompt = `${persona}\n\n`
+
+    if (isPremium && context) {
+        fullPrompt += `CONTEXT FROM USER DOCUMENTS:\n${context}\n\n`
+        fullPrompt += `Use the context provided above to answer the following query. If the answer isn't in the context, refer to your general NYC knowledge but prioritize the context.\n\n`
+    } else {
+        fullPrompt += `Answer the following query based on your specialized NYC knowledge.\n\n`
+    }
+
+    fullPrompt += `QUERY: ${query}`
+
+    try {
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.0-flash',
+            contents: fullPrompt
+        })
+        return response.text || "I'm sorry, I couldn't generate a response."
+    } catch (e: any) {
+        console.error("Specialized Agent Error:", e)
+        return "Specialized AI service is temporarily unavailable."
+    }
+}

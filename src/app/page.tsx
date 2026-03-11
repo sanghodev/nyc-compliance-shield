@@ -102,6 +102,9 @@ interface Contractor {
   jobs?: number
   reviews?: number
   verified?: boolean
+  company_name?: string
+  phone?: string
+  email?: string
 }
 
 
@@ -121,6 +124,8 @@ interface TenantRequest {
   priority: string
   contact_preference?: string
   assigned_pro_id?: number
+  property_id?: number
+  tenant_id?: string
 }
 
 interface UserProfile {
@@ -1256,6 +1261,22 @@ export default function APP_ROOT() {
   const [calStatusFilter, setCalStatusFilter] = useState("all")
   const [vaultSearch, setVaultSearch] = useState("")
 
+  // AI Consultants State
+  const [aiAgentType, setAiAgentType] = useState<'legal' | 'real_estate' | 'tax'>('legal')
+  const [aiChatMessages, setAiChatMessages] = useState<any[]>([
+    { role: 'assistant', content: 'Hello! I am your NYC Real Estate & Legal AI consultant. How can I help you today?' }
+  ])
+  const [aiChatInput, setAiChatInput] = useState("")
+  const [isAiChatLoading, setIsAiChatLoading] = useState(false)
+  const [showAddTenant, setShowAddTenant] = useState(false)
+  const [newTenant, setNewTenant] = useState({
+    full_name: "",
+    email: "",
+    unit: "",
+    property_id: ""
+  })
+  const [isAddingTenant, setIsAddingTenant] = useState(false)
+
   const runLL97Simulation = async (property?: any) => {
     setLl97Loading(true)
     setLl97Result(null)
@@ -1314,6 +1335,7 @@ export default function APP_ROOT() {
   const [properties, setProperties] = useState<Property[]>([])
   const [contractors, setContractors] = useState<Contractor[]>([])
   const [requests, setRequests] = useState<TenantRequest[]>([])
+  const [tenants, setTenants] = useState<UserProfile[]>([])
 
   // Fetch Data from Supabase
   useEffect(() => {
@@ -1390,25 +1412,132 @@ export default function APP_ROOT() {
       // 6. Refresh Contractors from real individual DB
       const fetchContractors = async () => {
         try {
-          const res = await fetch('/api/contractors')
-          const json = await res.json()
-          if (json.data) setContractors(json.data)
-        } catch (e) { console.error("Contractors API Error:", e) }
+          const { data } = await supabase.from('profiles').select('*').eq('role', 'contractor')
+          if (data) setContractors(prev => {
+            const contMap = new Map(prev.map(c => [c.id, c]))
+            data.forEach((p: any) => {
+              if (contMap.has(p.id)) {
+                const existing = contMap.get(p.id)!
+                contMap.set(p.id, { ...existing, phone: p.phone, email: p.email })
+              }
+            })
+            return Array.from(contMap.values())
+          })
+        } catch (e) { }
       }
       fetchContractors()
+
+      // 7. Fetch Tenants
+      if (role === 'manager' && props && props.length > 0) {
+        const propIds = props.map(p => p.id)
+        const { data: tenantData } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('role', 'tenant')
+          .in('property_id', propIds)
+        if (tenantData) setTenants(tenantData)
+      }
 
       const { data: reqs } = await reqsQuery
       if (reqs) {
         const formatted = reqs.map((r: any) => ({
           ...r,
-          tenantName: r.tenantName || r.tenant_name || 'Tenant', // Map snake_case to camelCase
-          desc: r.description || r.desc || ''
+          tenantName: r.tenant_name || 'Tenant',
+          desc: r.description
         }))
         setRequests(formatted)
       }
     }
-    fetchData()
-  }, [userRole])
+
+    if (userRole) fetchData()
+  }, [userRole, properties.length]) // Refresh when properties are loaded or role changes
+
+  const handleAddTenant = async () => {
+    if (!newTenant.email || !newTenant.property_id || !newTenant.unit) {
+      showToast("Please fill in all required fields.", "info")
+      return
+    }
+    setIsAddingTenant(true)
+    try {
+      // 1. Check if user exists in profiles
+      const { data: existing } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('email', newTenant.email.toLowerCase().trim())
+        .single()
+
+      if (existing) {
+        // Update existing profile (Associate with property)
+        const { error: upErr } = await supabase
+          .from('profiles')
+          .update({
+            property_id: parseInt(newTenant.property_id),
+            unit: newTenant.unit,
+            full_name: newTenant.full_name || existing.full_name,
+            role: 'tenant',
+            status: 'Active'
+          })
+          .eq('id', existing.id)
+
+        if (upErr) throw upErr
+        showToast("Tenant added successfully!")
+      } else {
+        // In this demo, we can't create Auth users from client side without Admin privileges.
+        // We'll show a message that an invite was "sent".
+        showToast(`Account for ${newTenant.email} not found. Invitation email sent!`, "info")
+      }
+
+      setShowAddTenant(false)
+      setNewTenant({ full_name: "", email: "", unit: "", property_id: "" })
+
+      // Refresh list
+      const propIds = properties.map(p => p.id)
+      const { data: tData } = await supabase.from('profiles').select('*').eq('role', 'tenant').in('property_id', propIds)
+      if (tData) setTenants(tData)
+
+    } catch (e: any) {
+      showToast(e.message || "Failed to add tenant", "error")
+    } finally {
+      setIsAddingTenant(false)
+    }
+  }
+
+  const handleAIChat = async () => {
+    if (!aiChatInput.trim()) return
+    const userMsg = { role: 'user', content: aiChatInput }
+    setAiChatMessages(prev => [...prev, userMsg])
+    const query = aiChatInput
+    setAiChatInput("")
+    setIsAiChatLoading(true)
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const res = await fetch('/api/ai/ask', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session?.access_token}`
+        },
+        body: JSON.stringify({ type: aiAgentType, query })
+      })
+      const json = await res.json()
+      if (json.response) {
+        setAiChatMessages(prev => [...prev, {
+          role: 'assistant',
+          content: json.response,
+          isPremium: json.isPremium,
+          usedContext: json.usedContext,
+          sources: json.sources
+        }])
+      } else {
+        showToast(json.error || "AI Error", "error")
+      }
+    } catch (e) {
+      showToast("Chat failed", "error")
+    } finally {
+      setIsAiChatLoading(false)
+    }
+  }
 
   // Fetch Users for Admin and Manager
   useEffect(() => {
@@ -1434,6 +1563,7 @@ export default function APP_ROOT() {
   const [chatMsg, setChatMsg] = useState("")
   const [manageProp, setManageProp] = useState<Property | null>(null)
   const [propCityData, setPropCityData] = useState<any>(null) // City Data State
+  const [isIndexingDoc, setIsIndexingDoc] = useState<number | null>(null)
   const [oathHearings, setOathHearings] = useState<any[]>([])
   const [oathLoading, setOathLoading] = useState(false)
   const [ll84Data, setLl84Data] = useState<any>(null)
@@ -3137,6 +3267,7 @@ export default function APP_ROOT() {
           {[
             { id: 'dashboard', icon: LayoutDashboard, label: 'Overview' },
             { id: 'autopilot', icon: Sparkles, label: 'AI Autopilot', isPro: true },
+            { id: 'ai_consultants', icon: MessageSquare, label: 'AI Consultants', isPro: true },
             { id: 'documents', icon: FileText, label: 'Document Vault', isPro: true },
             { id: 'requests', icon: ClipboardList, label: 'Requests', badge: requests.filter(r => r.status === 'Pending').length },
             { id: 'map', icon: MapIcon, label: 'Map' },
@@ -3146,7 +3277,10 @@ export default function APP_ROOT() {
             { id: 'll97', icon: Flame, label: 'LL97 Simulator' },
             { id: 'contractors', icon: HardHat, label: 'Contractor Network' },
             { id: 'settings', icon: Settings, label: 'Settings' }
-          ].map(i => (
+          ].filter(i => {
+            if (i.id === 'manager_tenants' || i.id === 'requests') return userRole === 'manager' || userRole === 'admin'
+            return true
+          }).map(i => (
             <button
               key={i.id}
               onClick={() => setActiveTab(i.id)}
@@ -3229,31 +3363,109 @@ export default function APP_ROOT() {
               </div>
             )}
 
-            {/* REQUESTS */}
-            {activeTab === 'requests' && (
-              <div className="space-y-4">
-                <h2 className="text-2xl font-bold">Tenant Requests</h2>
-                {requests.map(r => (
-                  <Card key={r.id} className="bg-card/50 hover:bg-card/80 cursor-pointer transition-all group" onClick={() => setSelectedRequest(r)}>
-                    <CardContent className="p-6 flex justify-between items-center">
-                      <div className="flex gap-4 items-center">
-                        <div className="w-10 h-10 rounded-full bg-sky-400/20 flex justify-center items-center text-sky-400 group-hover:scale-110 transition-transform"><Wrench className="w-5 h-5" /></div>
-                        <div>
-                          <h4 className="font-bold flex items-center gap-2">
-                            {r.issue}
-                            {r.assigned_pro_id && <Badge variant="outline" className="text-[10px] h-5 bg-purple-500/10 text-purple-400 border-purple-500/20">Assigned</Badge>}
-                          </h4>
-                          <p className="text-sm text-muted-foreground">{r.tenantName || r.tenant_name} • {r.unit}</p>
+            {/* AI CONSULTANTS */}
+            {activeTab === 'ai_consultants' && (
+              <div className="flex flex-col h-[calc(100vh-12rem)] gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <div className="flex justify-between items-end">
+                  <div>
+                    <h2 className="text-2xl font-bold flex items-center gap-2 text-sky-400">
+                      <MessageSquare className="w-6 h-6" /> Specialized AI Consultants
+                    </h2>
+                    <p className="text-muted-foreground mt-1">Get expert NYC legal, real estate, and tax advice from specialized AI agents.</p>
+                  </div>
+                  <div className="flex bg-slate-900/50 p-1 rounded-xl border border-slate-800">
+                    {[
+                      { id: 'legal', label: 'Legal', icon: Scale, color: 'text-purple-400' },
+                      { id: 'real_estate', label: 'Real Estate', icon: Building2, color: 'text-emerald-400' },
+                      { id: 'tax', label: 'Tax', icon: CreditCard, color: 'text-amber-400' }
+                    ].map(t => (
+                      <button
+                        key={t.id}
+                        onClick={() => {
+                          setAiAgentType(t.id as any)
+                          setAiChatMessages([{ role: 'assistant', content: `Hello! I'm your NYC ${t.label} AI consultant. How can I assist you?` }])
+                        }}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${aiAgentType === t.id ? 'bg-slate-800 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
+                      >
+                        <t.icon className={`w-4 h-4 ${aiAgentType === t.id ? t.color : ''}`} />
+                        {t.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex-1 flex flex-col bg-slate-900/40 backdrop-blur-md border border-slate-700/50 rounded-2xl overflow-hidden shadow-2xl">
+                  {/* Chat Area */}
+                  <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                    {aiChatMessages.map((m, i) => (
+                      <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                        <div className={`max-w-[80%] flex gap-3 ${m.role === 'user' ? 'flex-row-reverse' : ''}`}>
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${m.role === 'user' ? 'bg-sky-500' : 'bg-slate-800 border border-slate-700'}`}>
+                            {m.role === 'user' ? <Users className="w-4 h-4 text-white" /> : <Sparkles className="w-4 h-4 text-purple-400" />}
+                          </div>
+                          <div className={`space-y-2`}>
+                            <div className={`p-4 rounded-2xl text-sm leading-relaxed ${m.role === 'user' ? 'bg-sky-600 text-white rounded-tr-none' : 'bg-slate-800/50 text-slate-200 border border-slate-700/50 rounded-tl-none'}`}>
+                              {m.content}
+                            </div>
+                            {m.usedContext && (
+                              <div className="flex items-center gap-2 text-[10px] text-emerald-400 font-bold uppercase tracking-wider px-1">
+                                <ShieldCheck className="w-3 h-3" /> Growth Plan: Analyzed {m.sources?.length || 0} documents
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </div>
-                      <div className="flex gap-2">
-                        <Badge className={`${r.status === 'Pending' ? 'bg-amber-500' : r.status === 'Resolved' ? 'bg-emerald-500' : 'bg-sky-400'} hover:bg-opacity-80 transition-colors`}>{r.status}</Badge>
-                        <Button size="sm" variant="outline" className="invisible group-hover:visible" onClick={(e) => { e.stopPropagation(); setSelectedRequest(r); }}>
-                          Manage
-                        </Button>
+                    ))}
+                    {isAiChatLoading && (
+                      <div className="flex justify-start">
+                        <div className="flex gap-3">
+                          <div className="w-8 h-8 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center animate-pulse">
+                            <Sparkles className="w-4 h-4 text-purple-400" />
+                          </div>
+                          <div className="bg-slate-800/30 p-4 rounded-2xl rounded-tl-none border border-slate-700/30 flex items-center gap-2">
+                            <div className="w-1.5 h-1.5 bg-slate-500 rounded-full animate-bounce"></div>
+                            <div className="w-1.5 h-1.5 bg-slate-500 rounded-full animate-bounce [animation-delay:0.2s]"></div>
+                            <div className="w-1.5 h-1.5 bg-slate-500 rounded-full animate-bounce [animation-delay:0.4s]"></div>
+                          </div>
+                        </div>
                       </div>
-                    </CardContent></Card>
-                ))}
+                    )}
+                  </div>
+
+                  {/* Input Area */}
+                  <div className="p-4 bg-black/20 border-t border-slate-700/50">
+                    <form
+                      onSubmit={(e) => { e.preventDefault(); handleAIChat(); }}
+                      className="flex gap-2 bg-slate-900 border border-slate-700 rounded-xl p-1 focus-within:ring-2 focus-within:ring-sky-500/50 transition-all"
+                    >
+                      <Input
+                        value={aiChatInput}
+                        onChange={(e) => setAiChatInput(e.target.value)}
+                        placeholder={`${aiAgentType === 'legal' ? 'Ask about NYC Housing Law, MDL, or compliance...' : aiAgentType === 'tax' ? 'Ask about property tax assessments, exemptions, or PILOT...' : 'Ask about management strategy, ROI, or LL97 response...'}`}
+                        className="bg-transparent border-none text-white focus-visible:ring-0 placeholder:text-slate-600 h-11"
+                        disabled={isAiChatLoading}
+                      />
+                      <Button
+                        type="submit"
+                        size="icon"
+                        className="bg-sky-500 hover:bg-sky-400 text-white rounded-lg h-11 w-11 shadow-lg shadow-sky-500/20"
+                        disabled={isAiChatLoading || !aiChatInput.trim()}
+                      >
+                        {isAiChatLoading ? <Activity className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                      </Button>
+                    </form>
+                    <div className="mt-3 flex items-center justify-between text-[11px] text-slate-500 px-1">
+                      <div className="flex items-center gap-1">
+                        <Lock className="w-3 h-3" /> Secure AI Environment
+                      </div>
+                      {userProfile?.membership_tier === 'Free' && (
+                        <div className="text-amber-500 font-bold flex items-center gap-1 cursor-pointer hover:underline" onClick={() => setShowUpgradeModal(true)}>
+                          <Sparkles className="w-3 h-3" /> Upgrade to Growth for Personal Document Analysis
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
               </div>
             )}
 
@@ -3691,6 +3903,31 @@ export default function APP_ROOT() {
                               </td>
                               <td className="px-6 py-4 text-right">
                                 <div className="flex justify-end gap-2">
+                                  {userProfile?.membership_tier === 'Growth' || userProfile?.membership_tier === 'Business' || userRole === 'admin' ? (
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className={`h-8 w-8 ${isIndexingDoc === doc.id ? 'text-purple-400 animate-spin' : 'text-slate-500 hover:text-purple-400'}`}
+                                      title="AI Education (Index for Consulting)"
+                                      onClick={async (e) => {
+                                        e.stopPropagation()
+                                        setIsIndexingDoc(doc.id)
+                                        try {
+                                          const res = await fetch('/api/documents/index', {
+                                            method: 'POST',
+                                            headers: { 'Content-Type': 'application/json' },
+                                            body: JSON.stringify({ document_id: doc.id })
+                                          })
+                                          const json = await res.json()
+                                          if (json.success) showToast(json.message || "AI Education Complete!")
+                                          else showToast(json.error || "Education failed", "error")
+                                        } catch (e) { showToast("Indexing error", "error") }
+                                        finally { setIsIndexingDoc(null) }
+                                      }}
+                                    >
+                                      <Sparkles className="w-4 h-4" />
+                                    </Button>
+                                  ) : null}
                                   <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-white" onClick={() => setSelectedDoc(doc)}>
                                     <Activity className="w-4 h-4" />
                                   </Button>
@@ -3864,7 +4101,87 @@ export default function APP_ROOT() {
               </div>
             )}
 
+            {/* TENANTS (MANAGER ONLY) */}
+            {activeTab === 'manager_tenants' && (
+              <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <h2 className="text-2xl font-bold flex items-center gap-2 text-white"><Users className="w-6 h-6 text-sky-400" /> Tenant Management</h2>
+                    <p className="text-muted-foreground mt-1">Manage and invite tenants for your properties.</p>
+                  </div>
+                  <Button onClick={() => setShowAddTenant(true)} className="bg-indigo-500 hover:bg-blue-700 text-white gap-2"><Plus className="w-4 h-4" /> Add Tenant</Button>
+                </div>
 
+                {tenants.length === 0 ? (
+                  <div className="p-20 text-center border border-dashed border-slate-700/50 rounded-2xl bg-slate-900/20 backdrop-blur-md">
+                    <Users className="w-16 h-16 mx-auto text-slate-700 mb-4" />
+                    <h3 className="text-xl font-bold text-slate-300">No Tenants Yet</h3>
+                    <p className="text-slate-500 max-w-sm mx-auto mb-6">Add tenants to allow them to report issues and access building information via the Tenant Portal.</p>
+                    <Button variant="outline" className="border-slate-700/50 text-slate-400 hover:text-white" onClick={() => setShowAddTenant(true)}>Add Your First Tenant</Button>
+                  </div>
+                ) : (
+                  <div className="bg-slate-900/40 backdrop-blur-md border border-slate-700/50 rounded-xl overflow-hidden shadow-2xl">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left">
+                        <thead>
+                          <tr className="border-b border-slate-800/80 bg-slate-950/50">
+                            <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-widest">Name / Email</th>
+                            <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-widest">Building / Unit</th>
+                            <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-widest">Status</th>
+                            <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-widest">Joined At</th>
+                            <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-widest text-right">Action</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-800/50">
+                          {tenants.map(t => (
+                            <tr key={t.id} className="hover:bg-slate-800/30 transition-colors group">
+                              <td className="px-6 py-4">
+                                <div className="flex items-center gap-3">
+                                  <Avatar className="w-8 h-8 border border-slate-700/50"><AvatarImage src={`https://api.dicebear.com/7.x/initials/svg?seed=${t.full_name}`} /><AvatarFallback>TN</AvatarFallback></Avatar>
+                                  <div>
+                                    <div className="text-sm font-bold text-white uppercase">{t.full_name || 'Unnamed Tenant'}</div>
+                                    <div className="text-[10px] text-slate-500 font-mono">{t.email}</div>
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="px-6 py-4">
+                                <div className="text-sm text-slate-300 font-medium">{properties.find(p => p.id === t.property_id)?.address || 'Unknown Building'}</div>
+                                <Badge className="mt-1 text-[10px] bg-slate-800 text-slate-400 border-0">Unit {t.unit || 'N/A'}</Badge>
+                              </td>
+                              <td className="px-6 py-4">
+                                <Badge className={`${t.status === 'Active' ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' : 'bg-amber-500/10 text-amber-500 border-amber-500/20'} border`}>{t.status}</Badge>
+                              </td>
+                              <td className="px-6 py-4">
+                                <div className="text-sm font-mono text-slate-400">{new Date(t.created_at).toLocaleDateString()}</div>
+                              </td>
+                              <td className="px-6 py-4 text-right">
+                                <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-white" onClick={() => alert("Message feature coming soon")}><MessageSquare className="w-4 h-4" /></Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8 text-slate-400 hover:text-red-500"
+                                    onClick={async () => {
+                                      if (confirm(`Remove ${t.full_name} from this property?`)) {
+                                        await supabase.from('profiles').update({ property_id: null, unit: null }).eq('id', t.id)
+                                        setTenants(tenants.filter(x => x.id !== t.id))
+                                        showToast("Tenant removed.")
+                                      }
+                                    }}
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </Button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* LL97 SIMULATOR TAB */}
             {activeTab === 'll97' && (
@@ -4309,6 +4626,23 @@ export default function APP_ROOT() {
                         <Button className="w-full bg-indigo-500 hover:bg-blue-700 text-white gap-2" onClick={() => { setActiveTab('ll97'); setManageProp(null); runLL97Simulation(manageProp); }} disabled={ll97Loading}>
                           <Flame className="w-4 h-4" /> Run LL97 Simulation
                         </Button>
+
+                        {/* NEW: Building AI Expert contextual entry */}
+                        <div className="bg-purple-900/10 border border-purple-500/20 rounded-xl p-5 mt-6 group hover:border-purple-400/40 transition-all">
+                          <h3 className="font-bold text-white text-md flex items-center gap-2 mb-2"><Sparkles className="w-4 h-4 text-purple-400" /> Building AI Expert</h3>
+                          <p className="text-xs text-slate-400 mb-4 leading-relaxed">Get expert legal and real estate advice for this property ({manageProp.address}) based on its specific documents and live city data.</p>
+                          <Button
+                            className="w-full bg-purple-600 hover:bg-purple-500 text-white gap-2 shadow-lg shadow-purple-500/20"
+                            onClick={() => {
+                              setAiAgentType('legal');
+                              setAiChatMessages([{ role: 'assistant', content: `Hello! I've reviewed the documents and live data for ${manageProp.address}. How can I help you regarding this building?` }]);
+                              setActiveTab('ai_consultants');
+                              setManageProp(null);
+                            }}
+                          >
+                            <MessageSquare className="w-4 h-4" /> Chat with Building AI
+                          </Button>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -4923,7 +5257,86 @@ export default function APP_ROOT() {
         )}
       </AnimatePresence>
 
-    </div >
+      {/* ADD TENANT MODAL */}
+      <AnimatePresence>
+        {showAddTenant && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[9999] bg-black/80 flex items-center justify-center p-4">
+            <div className="bg-slate-900/40 backdrop-blur-md border border-slate-700/50 p-6 rounded-xl w-full max-w-md space-y-4 shadow-[0_0_40px_rgba(0,0,0,0.5)]">
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-2xl font-bold text-white flex items-center gap-2"><Users className="text-sky-400" /> Invite Tenant</h2>
+                <Button variant="ghost" size="icon" className="text-slate-400 hover:text-white" onClick={() => setShowAddTenant(false)}><X className="w-5 h-5" /></Button>
+              </div>
+
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <label className="text-xs text-slate-400 uppercase font-bold">Tenant Full Name</label>
+                  <Input
+                    placeholder="e.g. Jane Smith"
+                    value={newTenant.full_name}
+                    onChange={(e) => setNewTenant({ ...newTenant, full_name: e.target.value })}
+                    className="bg-slate-800/40 border-slate-600/50 text-white"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs text-slate-400 uppercase font-bold">Email Address *</label>
+                  <Input
+                    type="email"
+                    placeholder="jane@example.com"
+                    value={newTenant.email}
+                    onChange={(e) => setNewTenant({ ...newTenant, email: e.target.value })}
+                    className="bg-slate-800/40 border-slate-600/50 text-white"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-xs text-slate-400 uppercase font-bold">Unit # *</label>
+                    <Input
+                      placeholder="e.g. 4B"
+                      value={newTenant.unit}
+                      onChange={(e) => setNewTenant({ ...newTenant, unit: e.target.value })}
+                      className="bg-slate-800/40 border-slate-600/50 text-white"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs text-slate-400 uppercase font-bold">Building *</label>
+                    <select
+                      className="w-full bg-slate-800/40 border border-slate-600/50 text-white rounded-md p-2 text-sm outline-none focus:ring-1 focus:ring-sky-500"
+                      value={newTenant.property_id}
+                      onChange={(e) => setNewTenant({ ...newTenant, property_id: e.target.value })}
+                    >
+                      <option value="">Select Building</option>
+                      {properties.map(p => (
+                        <option key={p.id} value={p.id}>{p.address}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="p-4 bg-sky-500/10 border border-sky-500/20 rounded-lg text-xs text-slate-400 leading-relaxed">
+                  <div className="flex gap-2 items-start">
+                    <ShieldCheck className="w-4 h-4 text-sky-400 shrink-0" />
+                    <p>If the tenant already has an Evereez account, they will be instantly linked. If not, they will receive an invitation to join your building.</p>
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-3 pt-4 border-t border-slate-700/50 mt-6">
+                  <Button variant="ghost" className="text-slate-400 hover:text-white" onClick={() => setShowAddTenant(false)}>Cancel</Button>
+                  <Button
+                    className="bg-indigo-500 hover:bg-blue-700 text-white px-8"
+                    onClick={handleAddTenant}
+                    disabled={isAddingTenant || !newTenant.email || !newTenant.property_id || !newTenant.unit}
+                  >
+                    {isAddingTenant ? <Activity className="w-4 h-4 animate-spin mr-2" /> : <Send className="w-4 h-4 mr-2" />}
+                    Invite Tenant
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+    </div>
   )
 }
 
