@@ -3587,7 +3587,7 @@ export default function APP_ROOT() {
                     
                     <div className="space-y-4">
                       {requests.filter(r => r.status === 'Pending').length > 0 ? (
-                        requests.filter(r => r.status === 'Pending').slice(0, 4).map((req, idx) => (
+                        requests.filter(r => r.status === 'Pending').slice(0, 4).map((req: TenantRequest, idx) => (
                           <motion.div 
                             key={idx}
                             initial={{ opacity: 0, x: 20 }}
@@ -3597,8 +3597,8 @@ export default function APP_ROOT() {
                             onClick={() => setActiveTab('requests')}
                           >
                             <div className="flex justify-between items-start mb-2">
-                              <span className="text-xs font-bold text-white group-hover:text-sky-400 transition-colors">{req.category}</span>
-                              <span className="text-[10px] text-slate-500">{new Date(req.created_at).toLocaleDateString()}</span>
+                              <span className="text-xs font-bold text-white group-hover:text-sky-400 transition-colors">{req.type}</span>
+                              <span className="text-[10px] text-slate-500">{req.created_at ? new Date(req.created_at).toLocaleDateString() : 'Recent'}</span>
                             </div>
                             <p className="text-xs text-slate-400 line-clamp-2">{req.description}</p>
                           </motion.div>
