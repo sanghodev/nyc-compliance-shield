@@ -1,5 +1,5 @@
 import { NextResponse, NextRequest } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabaseClient';
+import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import { verifyAuth } from '@/lib/auth-utils';
 import { withErrorHandler } from '@/lib/error-handler';
 

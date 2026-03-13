@@ -1,6 +1,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabaseServerClient, supabaseAdmin } from './supabaseClient'
+import { getSupabaseServerClient } from './supabaseClient'
+import { supabaseAdmin } from './supabaseAdmin'
 
 /**
  * Verifies if the request is made by an authorized user and optionally checks for a specific role.
