@@ -52,12 +52,17 @@ Format your response strictly as valid JSON with the following structure:
 
     try {
         const response = await ai.models.generateContent({
-            model: 'gemini-2.0-flash',
+            model: 'gemini-2.5-flash-lite',
             contents: prompt,
-            config: { responseMimeType: 'application/json' },
+            config: { 
+                responseMimeType: 'application/json',
+                maxOutputTokens: 1000 
+            },
         })
 
-        return JSON.parse(response.text || '{}')
+        const text = response.text
+        if (!text) throw new Error('Empty response from AI')
+        return JSON.parse(text)
     } catch (e: any) {
         // Handle Quota/Rate Limit errors (429 RESOURCE_EXHAUSTED)
         const errorMsg = e.message || ""
@@ -79,12 +84,12 @@ export async function getEmbeddings(text: string): Promise<number[]> {
     const apiKey = process.env.GEMINI_API_KEY
     if (!apiKey) throw new Error('GEMINI_API_KEY is not configured')
 
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key=${apiKey}`
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent?key=${apiKey}`
     const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-            model: "models/text-embedding-004",
+            model: "models/gemini-embedding-001",
             content: { parts: [{ text }] }
         })
     })
@@ -100,14 +105,14 @@ export async function getEmbeddings(text: string): Promise<number[]> {
 
 const PERSONA_PROMPTS = {
     legal: `You are an elite NYC Housing Court Attorney. 
-You specialize in NYC Multiple Dwelling Law (MDL), HPD/DOB compliance, and complex lease disputes. 
-Your tone is professional, authoritative, and focused on risk mitigation.`,
+Role: Ultra-concise advisor.
+RULE: 3 Bullet points MAX. ONE short sentence per bullet. TOTAL < 50 words. Use Markdown. "간단명료".`,
     real_estate: `You are a top-tier NYC Property Management Strategist. 
-You focus on operational efficiency, building maintenance trends (LL97, LL84), and tenant satisfaction. 
-Your tone is analytical, forward-thinking, and business-oriented.`,
+Role: Ultra-concise advisor.
+RULE: 3 Bullet points MAX. ONE short sentence per bullet. TOTAL < 50 words. Use Markdown. "간단명료".`,
     tax: `You are a NYC Building Tax Specialist. 
-You are an expert on NYC Department of Finance (DOF) assessments, property tax exemptions (421-a, J-51), and PILOT programs. 
-Your tone is precise, detailed, and data-driven.`
+Role: Ultra-concise advisor.
+RULE: 3 Bullet points MAX. ONE short sentence per bullet. TOTAL < 50 words. Use Markdown. "간단명료".`
 }
 
 export async function askSpecializedAgent(
@@ -135,10 +140,16 @@ export async function askSpecializedAgent(
 
     try {
         const response = await ai.models.generateContent({
-            model: 'gemini-2.0-flash',
-            contents: fullPrompt
+            model: 'gemini-2.5-flash-lite',
+            contents: fullPrompt,
+            config: {
+                maxOutputTokens: 500,
+                temperature: 0.1
+            }
         })
-        return response.text || "I'm sorry, I couldn't generate a response."
+        const text = response.text
+        if (!text) throw new Error('Empty response from AI')
+        return text
     } catch (e: any) {
         console.error("Specialized Agent Error:", e)
         return "Specialized AI service is temporarily unavailable."

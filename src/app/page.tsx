@@ -25,6 +25,7 @@ import { supabase } from "@/lib/supabaseClient"
 import { AuthModal } from "@/components/AuthModal"
 import { useGeneratePDF } from "@/hooks/useGeneratePDF"
 import AffidavitTemplate from "@/components/AffidavitTemplate"
+import ReactMarkdown from 'react-markdown'
 
 // Error Boundary for debugging silent crashes
 class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean; error: Error | null }> {
@@ -1203,6 +1204,71 @@ function DocumentPreviewModal({ doc, onClose }: { doc: any, onClose: () => void 
   )
 }
 
+function AiHistoryModal({ isOpen, onClose, history, isLoading, onSelect }: { isOpen: boolean, onClose: () => void, history: any[], isLoading: boolean, onSelect: (record: any) => void }) {
+  if (!isOpen) return null
+  return (
+    <AnimatePresence>
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[10001] flex items-center justify-center p-4">
+        <div className="absolute inset-0 bg-black/95 backdrop-blur-md" onClick={onClose} />
+        <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="bg-slate-900/60 backdrop-blur-xl border border-slate-700/50 rounded-2xl w-full max-w-2xl max-h-[80vh] overflow-hidden relative shadow-2xl z-10 flex flex-col">
+          <div className="p-6 border-b border-slate-800 flex justify-between items-center bg-slate-950/40">
+            <div>
+              <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                <HistoryIcon className="w-5 h-5 text-sky-400" /> Consultation History
+              </h2>
+              <p className="text-xs text-slate-500 mt-1">Select a previously saved consultation to reload the chat.</p>
+            </div>
+            <Button variant="ghost" size="icon" className="text-slate-400 hover:text-white" onClick={onClose}><X className="w-5 h-5" /></Button>
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-6 space-y-3">
+            {isLoading ? (
+              <div className="flex flex-col items-center justify-center py-20 gap-4">
+                <Activity className="w-10 h-10 text-sky-400 animate-spin" />
+                <p className="text-slate-500 font-medium">Loading your consultations...</p>
+              </div>
+            ) : history.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-20 text-center gap-4">
+                <div className="w-16 h-16 rounded-full bg-slate-800 flex items-center justify-center">
+                  <MessageSquare className="w-8 h-8 text-slate-600" />
+                </div>
+                <div>
+                  <h3 className="text-white font-bold">No history found</h3>
+                  <p className="text-slate-500 text-sm mt-1 max-w-xs">You haven't saved any consultations yet. Save one to see it here.</p>
+                </div>
+              </div>
+            ) : (
+              history.map((record: any) => (
+                <button
+                  key={record.id}
+                  onClick={() => onSelect(record)}
+                  className="w-full text-left p-4 bg-slate-800/40 border border-slate-700/50 rounded-xl hover:border-sky-400 hover:bg-slate-800/80 transition-all group"
+                >
+                  <div className="flex justify-between items-start mb-2">
+                    <h4 className="font-bold text-slate-200 group-hover:text-white truncate pr-4">{record.title}</h4>
+                    <Badge variant="outline" className="border-slate-700 text-[10px] text-slate-500 capitalize">{record.agent_type}</Badge>
+                  </div>
+                  <div className="flex justify-between items-center text-[10px] text-slate-500">
+                    <div className="flex items-center gap-1">
+                      <Clock className="w-3 h-3" />
+                      {new Date(record.created_at).toLocaleString()}
+                    </div>
+                    <span>{record.messages.length} messages</span>
+                  </div>
+                </button>
+              ))
+            )}
+          </div>
+
+          <div className="p-4 border-t border-slate-800 bg-slate-950/40 flex justify-end">
+            <Button variant="outline" className="border-slate-700 text-slate-400 hover:text-white" onClick={onClose}>Close</Button>
+          </div>
+        </motion.div>
+      </motion.div>
+    </AnimatePresence>
+  )
+}
+
 // --- MAIN APP ---
 export default function APP_ROOT() {
   const [userRole, setUserRole] = useState<UserRole>(null)
@@ -1258,6 +1324,10 @@ export default function APP_ROOT() {
   ])
   const [aiChatInput, setAiChatInput] = useState("")
   const [isAiChatLoading, setIsAiChatLoading] = useState(false)
+  const [isSavingChat, setIsSavingChat] = useState(false)
+  const [aiChatHistory, setAiChatHistory] = useState<any[]>([])
+  const [showAiHistory, setShowAiHistory] = useState(false)
+  const [isHistoryLoading, setIsHistoryLoading] = useState(false)
   const [showAddTenant, setShowAddTenant] = useState(false)
   const [newTenant, setNewTenant] = useState({
     full_name: "",
@@ -1527,6 +1597,62 @@ export default function APP_ROOT() {
     } finally {
       setIsAiChatLoading(false)
     }
+  }
+
+  const handleSaveChat = async () => {
+    if (aiChatMessages.length <= 1) {
+      showToast("No chat content to save.", "info")
+      return
+    }
+    setIsSavingChat(true)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const res = await fetch('/api/ai/save-chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session?.access_token}`
+        },
+        body: JSON.stringify({
+          agent_type: aiAgentType,
+          messages: aiChatMessages,
+          title: `NYC ${aiAgentType} Advice (${new Date().toLocaleDateString()})`
+        })
+      })
+      const json = await res.json()
+      if (json.success) {
+        showToast("Consultation saved to your records.", "success")
+      } else {
+        showToast(json.error || "Save failed", "error")
+      }
+    } catch (e) {
+      showToast("Error saving consultation", "error")
+    } finally {
+      setIsSavingChat(false)
+    }
+  }
+
+  const fetchChatHistory = async () => {
+    setIsHistoryLoading(true)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const res = await fetch('/api/ai/save-chat', {
+        headers: { Authorization: `Bearer ${session?.access_token}` }
+      })
+      const json = await res.json()
+      if (json.success) setAiChatHistory(json.data)
+    } catch (e) {
+      console.error("Error fetching history:", e)
+    } finally {
+      setIsHistoryLoading(false)
+    }
+  }
+
+  const loadChatRecord = (record: any) => {
+    setAiAgentType(record.agent_type)
+    setAiChatMessages(record.messages)
+    setShowAiHistory(false)
+    showToast(`Loaded: ${record.title}`, "success")
   }
 
   // Fetch Users for Admin and Manager
@@ -3317,45 +3443,185 @@ export default function APP_ROOT() {
           <div className="flex-1 overflow-y-auto p-8 space-y-8 bg-slate-950/20">
             {/* DASHBOARD */}
             {activeTab === 'dashboard' && (
-              <div className="space-y-6">
-                {/* EXPIRY ALERT BANNER */}
+              <div className="space-y-10 pb-10">
+                {/* PREMIUM HERO SECTION */}
+                <motion.div 
+                  initial={{ opacity: 0, y: 20 }} 
+                  animate={{ opacity: 1, y: 0 }}
+                  className="relative overflow-hidden rounded-3xl bg-slate-900 border border-slate-700/50 shadow-2xl p-8 group"
+                >
+                  <div className="absolute top-0 right-0 -mr-20 -mt-20 w-80 h-80 bg-sky-500/10 rounded-full blur-[100px] group-hover:bg-sky-500/20 transition-all duration-700"></div>
+                  <div className="absolute bottom-0 left-0 -ml-20 -mb-20 w-80 h-80 bg-indigo-500/10 rounded-full blur-[100px] group-hover:bg-indigo-500/20 transition-all duration-700"></div>
+                  
+                  <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 text-sky-400 font-bold uppercase tracking-widest text-xs">
+                        <Sparkles className="w-4 h-4 animate-pulse" /> AI Powered Portfolio Manager
+                      </div>
+                      <h1 className="text-4xl md:text-5xl font-black text-white tracking-tight leading-tight">
+                        {new Date().getHours() < 12 ? 'Good Morning' : new Date().getHours() < 18 ? 'Good Afternoon' : 'Good Evening'}, <span className="text-transparent bg-clip-text bg-gradient-to-r from-sky-400 to-indigo-400">{userProfile?.full_name?.split(' ')[0] || 'Manager'}</span>
+                      </h1>
+                      <p className="text-slate-400 text-lg max-w-xl leading-relaxed">
+                        Welcome back to your NYC compliance mission control. You have <span className="text-white font-bold">{properties.length} active properties</span> and <span className="text-amber-400 font-bold">{requests.filter(r => r.status === 'Pending').length} unresolved requests</span> that need your attention.
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-4">
+                      <Button onClick={() => setShowAddProperty(true)} size="lg" className="bg-sky-500 hover:bg-sky-400 text-white shadow-lg shadow-sky-500/20 px-8 py-6 rounded-2xl font-bold gap-2">
+                        <Plus className="w-5 h-5" /> Add Property
+                      </Button>
+                      <Button variant="outline" size="lg" onClick={() => setActiveTab('ai_consultants')} className="border-slate-700 text-white hover:bg-slate-800 px-8 py-6 rounded-2xl font-bold gap-2 backdrop-blur-md">
+                        <MessageSquare className="w-5 h-5 text-sky-400" /> AI Consultant
+                      </Button>
+                    </div>
+                  </div>
+                </motion.div>
+
+                {/* EXPIRY ALERT BANNER (If any) */}
                 {vaultDocuments.some(d => d.expires_at && (new Date(d.expires_at).getTime() - new Date().getTime()) < 30 * 24 * 60 * 60 * 1000) && (
-                  <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-xl flex items-center justify-between group">
+                  <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-2xl flex items-center justify-between group backdrop-blur-sm">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-amber-500/20 flex items-center justify-center text-amber-500 font-bold">!</div>
+                      <div className="w-12 h-12 rounded-2xl bg-amber-500/20 flex items-center justify-center text-amber-500 font-bold shadow-inner">!</div>
                       <div>
-                        <h4 className="font-bold text-amber-500">Document Expiration Warning</h4>
-                        <p className="text-xs text-slate-400">You have {vaultDocuments.filter(d => d.expires_at && (new Date(d.expires_at).getTime() - new Date().getTime()) < 30 * 24 * 60 * 60 * 1000).length} documents expiring in the next 30 days.</p>
+                        <h4 className="font-bold text-amber-500">Urgent: Document Expiration</h4>
+                        <p className="text-xs text-slate-400">Critical: <span className="text-white font-bold">{vaultDocuments.filter(d => d.expires_at && (new Date(d.expires_at).getTime() - new Date().getTime()) < 30 * 24 * 60 * 60 * 1000).length} documents</span> are expiring within the next 30 days. Action required to maintain compliance.</p>
                       </div>
                     </div>
-                    <Button size="sm" variant="outline" className="border-amber-500/30 text-amber-500 hover:bg-amber-500/10" onClick={() => { setActiveTab('documents'); setDocFilter('all'); }}>View Documents</Button>
+                    <Button size="sm" className="bg-amber-500 hover:bg-amber-400 text-black font-bold rounded-lg" onClick={() => { setActiveTab('documents'); setDocFilter('all'); }}>Review Now</Button>
                   </motion.div>
                 )}
-                <div className="grid grid-cols-4 gap-6">
-                  <Card className="bg-card/50">
-                    <CardContent className="p-6">Properties
-                      <h3 className="text-2xl font-bold">
-                        {properties.filter(p => !['Pending Verification', 'Rejected'].includes(p.status || '')).length}
-                      </h3>
-                    </CardContent>
-                  </Card>
-                  <Card className="bg-card/50"><CardContent className="p-6">Requests<h3 className="text-2xl font-bold text-orange-400">{requests.filter(r => r.status === 'Pending').length}</h3></CardContent></Card>
+
+                {/* EXPANDED METRICS GRID */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                  {[
+                    { label: 'Properties', value: properties.length.toString(), sub: 'Managed', icon: Building2, color: 'text-sky-400', bg: 'bg-sky-500/10' },
+                    { label: 'Active Requests', value: requests.filter(r => r.status === 'Pending').length.toString(), sub: 'Needs Review', icon: ClipboardList, color: 'text-orange-400', bg: 'bg-orange-500/10' },
+                    { label: 'Vault Docs', value: vaultDocuments.length.toString(), sub: 'Securely Stored', icon: FileText, color: 'text-indigo-400', bg: 'bg-indigo-500/10' },
+                    { label: 'Compliance', value: '94%', sub: 'Global Score', icon: ShieldCheck, color: 'text-emerald-400', bg: 'bg-emerald-500/10' }
+                  ].map((stat, idx) => (
+                    <motion.div 
+                      key={idx}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: idx * 0.1 }}
+                      className="bg-slate-900/40 backdrop-blur-md border border-slate-700/50 p-6 rounded-3xl hover:border-slate-500/50 transition-all group"
+                    >
+                      <div className="flex justify-between items-start mb-4">
+                        <div className={`p-3 rounded-2xl ${stat.bg} ${stat.color} group-hover:scale-110 transition-transform`}>
+                          <stat.icon className="w-6 h-6" />
+                        </div>
+                        <ArrowUpRight className="w-4 h-4 text-slate-600 group-hover:text-white transition-colors" />
+                      </div>
+                      <div className="space-y-1">
+                        <h3 className="text-3xl font-black text-white">{stat.value}</h3>
+                        <p className="text-slate-500 text-xs font-bold uppercase tracking-widest">{stat.label}</p>
+                        <p className="text-[10px] text-slate-600 font-medium italic">{stat.sub}</p>
+                      </div>
+                    </motion.div>
+                  ))}
                 </div>
-                {properties.filter(p => !['Pending Verification', 'Rejected'].includes(p.status || '')).length > 0 ? (
-                  <div className="h-[400px] rounded-xl overflow-hidden border border-border">
-                    <MapViewer
-                      properties={properties.filter(p => !['Pending Verification', 'Rejected'].includes(p.status || ''))}
-                      onSelectProperty={setManageProp}
-                    />
+
+                {/* QUICK ACTIONS & RECENT ACTIVITY */}
+                <div className="grid lg:grid-cols-3 gap-8">
+                  <div className="lg:col-span-2 space-y-6">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                        <Zap className="w-5 h-5 text-amber-400" /> Command Center
+                      </h3>
+                    </div>
+                    
+                    <div className="grid sm:grid-cols-2 gap-4">
+                      <button 
+                        onClick={() => setActiveTab('autopilot')}
+                        className="bg-gradient-to-br from-indigo-600/20 to-indigo-900/20 border border-indigo-500/30 p-6 rounded-3xl text-left hover:border-indigo-400 transition-all group relative overflow-hidden"
+                      >
+                        <Sparkles className="w-10 h-10 text-indigo-400 mb-4 group-hover:scale-110 transition-transform" />
+                        <h4 className="text-lg font-bold text-white mb-2">Compliance Autopilot</h4>
+                        <p className="text-sm text-slate-400">Launch AI strategy to resolve pending building violations automatically.</p>
+                      </button>
+                      
+                      <button 
+                        onClick={() => setActiveTab('documents')}
+                        className="bg-gradient-to-br from-emerald-600/20 to-emerald-900/20 border border-emerald-500/30 p-6 rounded-3xl text-left hover:border-emerald-400 transition-all group"
+                      >
+                        <FileText className="w-10 h-10 text-emerald-400 mb-4 group-hover:scale-110 transition-transform" />
+                        <h4 className="text-lg font-bold text-white mb-2">Document Analysis</h4>
+                        <p className="text-sm text-slate-400">Upload and instantly extract data from leases, insurance, and notices.</p>
+                      </button>
+                    </div>
+
+                    {properties.filter(p => !['Pending Verification', 'Rejected'].includes(p.status || '')).length > 0 ? (
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between">
+                          <h3 className="text-lg font-bold text-white">Portfolio Map View</h3>
+                          <Button variant="ghost" size="sm" onClick={() => setActiveTab('map')} className="text-sky-400 hover:text-white">View Full Map <ArrowRight className="w-3 h-3 ml-1" /></Button>
+                        </div>
+                        <div className="h-[300px] rounded-3xl overflow-hidden border border-slate-700/50 shadow-inner shadow-black">
+                          <MapViewer
+                            properties={properties.filter(p => !['Pending Verification', 'Rejected'].includes(p.status || ''))}
+                            onSelectProperty={setManageProp}
+                          />
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="p-12 text-center bg-slate-900/40 backdrop-blur-md border border-slate-700/50 rounded-3xl">
+                        <Building2 className="w-14 h-14 mx-auto text-slate-600 mb-4" />
+                        <h3 className="text-xl font-bold text-white mb-2">Portfolio Empty</h3>
+                        <p className="text-slate-400 mb-6">Start by adding your first NYC property to unlock the full compliance dashboard.</p>
+                        <Button onClick={() => setShowAddProperty(true)} className="bg-sky-500 hover:bg-sky-400 text-white shadow-lg shadow-sky-500/20 rounded-xl px-8 font-bold">Register Property</Button>
+                      </div>
+                    )}
                   </div>
-                ) : (
-                  <div className="p-12 text-center bg-slate-900/40 backdrop-blur-md border border-slate-700/50 rounded-xl">
-                    <Building2 className="w-14 h-14 mx-auto text-slate-600 mb-4" />
-                    <h3 className="text-xl font-bold text-white mb-2">Welcome to Evereez</h3>
-                    <p className="text-slate-400 mb-6">Register your first property to start monitoring compliance, violations, and tenant requests.</p>
-                    <Button className="bg-primary text-white gap-2" onClick={() => setShowAddProperty(true)}><Plus className="w-4 h-4" /> Add Your First Property</Button>
+
+                  {/* SIDEBAR: RECENT REQUESTS PREVIEW */}
+                  <div className="space-y-6">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                        <Bell className="w-5 h-5 text-sky-400" /> Pending Items
+                      </h3>
+                      <Badge className="bg-sky-500/20 text-sky-400">{requests.filter(r => r.status === 'Pending').length}</Badge>
+                    </div>
+                    
+                    <div className="space-y-4">
+                      {requests.filter(r => r.status === 'Pending').length > 0 ? (
+                        requests.filter(r => r.status === 'Pending').slice(0, 4).map((req: TenantRequest, idx) => (
+                          <motion.div 
+                            key={idx}
+                            initial={{ opacity: 0, x: 20 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            transition={{ delay: idx * 0.1 }}
+                            className="p-4 bg-slate-900/40 border border-slate-700/50 rounded-2xl hover:bg-slate-800/40 transition-colors cursor-pointer group"
+                            onClick={() => setActiveTab('requests')}
+                          >
+                            <div className="flex justify-between items-start mb-2">
+                              <span className="text-xs font-bold text-white group-hover:text-sky-400 transition-colors">{req.type}</span>
+                              <span className="text-[10px] text-slate-500">{req.created_at ? new Date(req.created_at).toLocaleDateString() : 'Recent'}</span>
+                            </div>
+                            <p className="text-xs text-slate-400 line-clamp-2">{req.description}</p>
+                          </motion.div>
+                        ))
+                      ) : (
+                        <div className="py-10 text-center border border-dashed border-slate-700/50 rounded-2xl">
+                          <CheckCircle className="w-8 h-8 mx-auto text-slate-700 mb-2" />
+                          <p className="text-xs text-slate-500 italic">No pending requests</p>
+                        </div>
+                      )}
+                      
+                      <Button variant="ghost" onClick={() => setActiveTab('requests')} className="w-full text-slate-500 hover:text-white border border-slate-800/50 rounded-xl text-xs py-6">
+                        View All Requests <ArrowRight className="w-3 h-3 ml-2" />
+                      </Button>
+                    </div>
+
+                    {/* UPGRADE TEASER if not Pro */}
+                    {userProfile?.membership_tier !== 'Pro' && (
+                      <div className="mt-8 p-6 bg-gradient-to-br from-indigo-600 to-purple-700 rounded-3xl text-white shadow-2xl relative overflow-hidden group">
+                        <Sparkles className="absolute -top-4 -right-4 w-20 h-20 text-white/10 group-hover:scale-150 transition-transform duration-1000" />
+                        <h4 className="font-black text-lg mb-2 relative z-10">Go Pro Today</h4>
+                        <p className="text-xs text-indigo-100 mb-4 opacity-90 leading-relaxed">Unlock unlimited AI Compliance roadmaps and priority contractor matching.</p>
+                        <Button onClick={() => setShowUpgradeModal(true)} className="w-full bg-white text-indigo-600 hover:bg-indigo-50 font-bold rounded-xl shadow-lg">Upgrade Now</Button>
+                      </div>
+                    )}
                   </div>
-                )}
+                </div>
               </div>
             )}
 
@@ -3388,6 +3654,30 @@ export default function APP_ROOT() {
                       </button>
                     ))}
                   </div>
+                  <div className="flex gap-2">
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="border-slate-700 text-slate-300 hover:text-white hover:bg-slate-800 gap-2 font-bold"
+                      onClick={handleSaveChat}
+                      disabled={isSavingChat || aiChatMessages.length <= 1}
+                    >
+                      {isSavingChat ? <Activity className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3" />}
+                      Save Consultation
+                    </Button>
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="text-slate-400 hover:text-white gap-2 font-bold"
+                      onClick={() => {
+                        setShowAiHistory(true)
+                        fetchChatHistory()
+                      }}
+                    >
+                      <HistoryIcon className="w-3 h-3" />
+                      History
+                    </Button>
+                  </div>
                 </div>
 
                 <div className="flex-1 flex flex-col bg-slate-900/40 backdrop-blur-md border border-slate-700/50 rounded-2xl overflow-hidden shadow-2xl">
@@ -3400,8 +3690,16 @@ export default function APP_ROOT() {
                             {m.role === 'user' ? <Users className="w-4 h-4 text-white" /> : <Sparkles className="w-4 h-4 text-purple-400" />}
                           </div>
                           <div className={`space-y-2`}>
-                            <div className={`p-4 rounded-2xl text-sm leading-relaxed ${m.role === 'user' ? 'bg-sky-600 text-white rounded-tr-none' : 'bg-slate-800/50 text-slate-200 border border-slate-700/50 rounded-tl-none'}`}>
-                              {m.content}
+                            <div className={`p-4 rounded-2xl text-sm leading-relaxed ${m.role === 'user' ? 'bg-sky-600 text-white rounded-tr-none' : 'bg-slate-800/50 text-slate-200 border border-slate-700/50 rounded-tl-none ProseMirror markdown-content'}`}>
+                              {m.role === 'assistant' ? (
+                                <div className="prose prose-invert max-w-none text-sm leading-relaxed">
+                                  <ReactMarkdown>
+                                    {m.content}
+                                  </ReactMarkdown>
+                                </div>
+                              ) : (
+                                m.content
+                              )}
                             </div>
                             {m.usedContext && (
                               <div className="flex items-center gap-2 text-[10px] text-emerald-400 font-bold uppercase tracking-wider px-1">
@@ -4457,6 +4755,13 @@ export default function APP_ROOT() {
           </div>
         </ErrorBoundary>
         <DocumentPreviewModal doc={selectedDoc} onClose={() => setSelectedDoc(null)} />
+        <AiHistoryModal 
+          isOpen={showAiHistory} 
+          onClose={() => setShowAiHistory(false)} 
+          history={aiChatHistory} 
+          isLoading={isHistoryLoading} 
+          onSelect={loadChatRecord} 
+        />
       </main>
 
       {/* MANAGE PROPERTY MODAL */}
