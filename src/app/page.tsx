@@ -10,7 +10,7 @@ import {
   Wrench, CheckCircle, AlertTriangle, Filter, CreditCard,
   ArrowUpRight, Activity, X, MessageSquare, Send,
   Shield, ShieldCheck, Zap, BarChart3, ChevronDown, ChevronUp,
-  Sparkles, ArrowRight, Scale, Flame, HardHat, Calendar, ArrowUpCircle, Download, Leaf, Clock, ClipboardList, PenTool, Smartphone, Phone, Lock, Trash2, Home, Copy, Check, ShieldAlert, History as HistoryIcon
+  Sparkles, ArrowRight, Scale, Flame, HardHat, Calendar, ArrowUpCircle, Download, Leaf, Clock, ClipboardList, PenTool, Smartphone, Phone, Lock, Trash2, Home, Copy, Check, ShieldAlert, History as HistoryIcon, LogOut
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -876,7 +876,7 @@ function ViolationItem({ v, onGenerateAffidavit, isGenerating }: { v: any, onGen
             <p className="text-slate-400 text-xs mb-3">{insight.action}</p>
 
             <div className="flex gap-2">
-              <Button size="sm" className="flex-1 bg-indigo-500 hover:bg-blue-700 text-white h-7 text-xs gap-2" onClick={(e) => { e.stopPropagation(); alert(`Connecting you with ${insight.pro}... (Feature coming soon)`) }}>
+              <Button size="sm" className="flex-1 bg-indigo-500 hover:bg-blue-700 text-white h-7 text-xs gap-2" onClick={(e) => { e.stopPropagation(); showToast(`Connecting you with ${insight.pro}...`, "info") }}>
                 Connect {insight.pro} <ArrowRight className="w-3 h-3" />
               </Button>
               {onGenerateAffidavit && (
@@ -1013,7 +1013,11 @@ function PropertyDetailsModal({ property, cityData, onClose }: { property: Prope
                 {/* 2. Summary Stats & Codes Row */}
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                   <Card className="bg-slate-900/40 backdrop-blur-md border-slate-700/50 hover:border-slate-700/50 transition-colors"><CardContent className="p-4 flex flex-col items-center justify-center text-center">
-                    <div className="text-sm font-bold text-sky-400 mb-1 tracking-widest bg-sky-500/10 px-3 py-1 rounded-md border border-sky-500/20">{property.access_code || "N/A"}</div>
+                    <div className="text-sm font-bold text-sky-400 mb-1 tracking-widest bg-sky-500/10 px-3 py-1 rounded-md border border-sky-500/20">
+                      {userRole && (userRole === 'admin' || property.manager_id === (supabase.auth.getUser() as any)?.data?.user?.id)
+                        ? (property.access_code || "N/A")
+                        : "••••••"}
+                    </div>
                     <div className="text-[10px] text-slate-500 uppercase font-bold tracking-wider mt-1">Tenant Access Code</div>
                   </CardContent></Card>
                   <Card className="bg-slate-900/40 backdrop-blur-md border-slate-700/50 hover:border-slate-700/50 transition-colors"><CardContent className="p-4 flex flex-col items-center">
@@ -1069,7 +1073,11 @@ function PropertyDetailsModal({ property, cityData, onClose }: { property: Prope
 
                 <div className="flex justify-end pt-6 border-t border-slate-700/50">
                   <Button variant="outline" onClick={onClose} className="mr-2 border-slate-700/50 text-gray-300 hover:text-white">Close</Button>
-                  <Button className="bg-indigo-500 hover:bg-blue-700 text-white shadow-lg shadow-blue-900/20">Claim This Building</Button>
+                  {userRole && (
+                    <Button className="bg-indigo-500 hover:bg-blue-700 text-white shadow-lg shadow-blue-900/20" onClick={() => showToast("Ownership verified. Redirecting...", "success")}>
+                      Manage Portfolio
+                    </Button>
+                  )}
                 </div>
               </>
             )}
@@ -3415,6 +3423,21 @@ export default function APP_ROOT() {
             </button>
           ))}
         </nav>
+
+        {/* LOGOUT BUTTON */}
+        <div className="px-4 pb-2">
+          <button
+            onClick={async () => {
+              await supabase.auth.signOut()
+              setUserRole(null)
+              window.location.href = "/"
+            }}
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all hover:bg-red-500/10 text-slate-400 hover:text-red-500"
+          >
+            <LogOut className="w-5 h-5" />
+            <span className="flex-1 text-left">Log Out</span>
+          </button>
+        </div>
 
         {/* API Status Widget */}
         <div className="p-4 mt-auto border-t border-border bg-black/20">

@@ -63,9 +63,6 @@ export function AuthModal({ isOpen, onClose, defaultRole, selectedTier, onLoginS
                         throw new Error(data.error || "Invalid Access Code or Unit.")
                     }
                     propertyId = data.property_id
-                } else if (defaultRole === 'admin') {
-                    if (!accessCode) throw new Error("Admin Secret Code required.")
-                    if (accessCode !== 'SUPERADMIN2026') throw new Error("Invalid Admin Secret Code.")
                 }
 
                 // Prepare Metdata
@@ -74,7 +71,7 @@ export function AuthModal({ isOpen, onClose, defaultRole, selectedTier, onLoginS
                     property_id: propertyId,
                     unit: defaultRole === 'tenant' ? unit.trim().toUpperCase() : null,
                     access_code: accessCode,
-                    status: defaultRole === 'manager' ? 'Active' : 'Pending', // Manager active by default for trial
+                    status: 'Pending', // All new signups require approval
                     membership_tier: selectedTier || 'Starter', // Default to Starter
                     commission_rate: defaultRole === 'contractor' ? 0.15 : 0 // 15% for contractors
                 }
