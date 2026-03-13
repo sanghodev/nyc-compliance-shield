@@ -552,11 +552,7 @@ function LandingPage({ onEnter, publicSearchQuery, handlePublicSearch, handleSea
             </Button>
           </div>
 
-          <div className="pt-12 animate-fade-in delay-500">
-            <button onClick={() => onEnter("admin")} className="text-gray-600 hover:text-gray-300 text-sm font-medium flex items-center gap-2 mx-auto transition-all group border border-transparent hover:border-slate-700/50 rounded-full px-4 py-2">
-              <ShieldCheck className="w-4 h-4 group-hover:text-purple-500 transition-colors" /> Super Admin Access
-            </button>
-          </div>
+          {/* Admin access hidden for security - use obfuscated route directly */}
         </div>
       </section>
 

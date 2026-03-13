@@ -1,32 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
-
-const supabaseAdmin = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
-
-function getUserClient(authHeader: string) {
-    return createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-        { global: { headers: { Authorization: authHeader } } }
-    )
-}
+import { supabaseAdmin } from '@/lib/supabaseClient'
+import { verifyAuth, verifyPropertyAccess } from '@/lib/auth-utils'
+import { withErrorHandler } from '@/lib/error-handler'
 
 // GET /api/documents?property_id=X&category=lease&expiring=true
-export async function GET(request: NextRequest) {
-    const authHeader = request.headers.get('authorization')
-    if (!authHeader) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
-    const supabase = getUserClient(authHeader)
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+async function getDocumentsHandler(request: NextRequest) {
+    const { user, error, status } = await verifyAuth(request)
+    if (error) return NextResponse.json({ error }, { status })
 
     const { searchParams } = new URL(request.url)
     const propertyId = searchParams.get('property_id')
     const category = searchParams.get('category')
-    const expiringDays = searchParams.get('expiring_days') // e.g. 30
+    const expiringDays = searchParams.get('expiring_days')
+
+    // Authorization check: User must have access to the property (if specific property is requested)
+    if (propertyId) {
+        const { data: profile } = await supabaseAdmin.from('profiles').select('role').eq('id', user!.id).single()
+        const hasAccess = await verifyPropertyAccess(user!.id, parseInt(propertyId), profile?.role || 'tenant')
+        if (!hasAccess) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
 
     let query = supabaseAdmin
         .from('documents')
@@ -44,41 +36,37 @@ export async function GET(request: NextRequest) {
             .gte('expires_at', new Date().toISOString())
     }
 
-    // Scope to manager's properties
-    const { data: profile } = await supabaseAdmin
-        .from('profiles').select('role').eq('id', user.id).single()
-
-    if (profile?.role !== 'admin') {
-        // Get manager's property IDs
-        const { data: props } = await supabaseAdmin
-            .from('properties').select('id').eq('manager_id', user.id)
+    // Default scoping if no propertyId is provided
+    const { data: profile } = await supabaseAdmin.from('profiles').select('role').eq('id', user!.id).single()
+    if (profile?.role !== 'admin' && !propertyId) {
+        const { data: props } = await supabaseAdmin.from('properties').select('id').eq('manager_id', user!.id)
         const propIds = (props || []).map((p: any) => p.id)
         if (propIds.length === 0) return NextResponse.json({ data: [] })
         query = query.in('property_id', propIds)
     }
 
-    const { data, error } = await query
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    const { data, error: queryError } = await query
+    if (queryError) throw queryError
     return NextResponse.json({ data })
 }
 
 // DELETE /api/documents?id=X
-export async function DELETE(request: NextRequest) {
-    const authHeader = request.headers.get('authorization')
-    if (!authHeader) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+async function deleteDocumentHandler(request: NextRequest) {
+    const { user, error, status } = await verifyAuth(request)
+    if (error) return NextResponse.json({ error }, { status })
 
     const { searchParams } = new URL(request.url)
     const docId = searchParams.get('id')
     if (!docId) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
 
-    const supabase = getUserClient(authHeader)
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
-    // Fetch doc to get file_url
+    // Fetch doc to verify ownership
     const { data: doc, error: fetchErr } = await supabaseAdmin
         .from('documents').select('*').eq('id', parseInt(docId)).single()
     if (fetchErr || !doc) return NextResponse.json({ error: 'Document not found' }, { status: 404 })
+
+    const { data: profile } = await supabaseAdmin.from('profiles').select('role').eq('id', user!.id).single()
+    const hasAccess = await verifyPropertyAccess(user!.id, doc.property_id, profile?.role || 'tenant')
+    if (!hasAccess) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
     // Delete from Storage
     const filePath = doc.file_url.split('/document-vault/')[1]
@@ -87,35 +75,42 @@ export async function DELETE(request: NextRequest) {
     }
 
     // Delete from DB
-    const { error: delErr } = await supabaseAdmin
-        .from('documents').delete().eq('id', parseInt(docId))
-    if (delErr) return NextResponse.json({ error: delErr.message }, { status: 500 })
+    const { error: delErr } = await supabaseAdmin.from('documents').delete().eq('id', parseInt(docId))
+    if (delErr) throw delErr
 
     return NextResponse.json({ success: true })
 }
 
-// PATCH /api/documents?id=X — update metadata (category, notes, tags)
-export async function PATCH(request: NextRequest) {
-    const authHeader = request.headers.get('authorization')
-    if (!authHeader) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+// PATCH /api/documents?id=X
+async function patchDocumentHandler(request: NextRequest) {
+    const { user, error, status } = await verifyAuth(request)
+    if (error) return NextResponse.json({ error }, { status })
 
     const { searchParams } = new URL(request.url)
     const docId = searchParams.get('id')
     if (!docId) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
 
-    let body: any
-    try { body = await request.json() } catch {
-        return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
-    }
-
+    const body = await request.json()
     const allowed = ['category', 'notes', 'tags', 'unit', 'expires_at']
     const updates: any = {}
     for (const key of allowed) {
         if (body[key] !== undefined) updates[key] = body[key]
     }
 
-    const { data, error } = await supabaseAdmin
+    // Fetch doc to verify ownership
+    const { data: doc } = await supabaseAdmin.from('documents').select('property_id').eq('id', parseInt(docId)).single()
+    if (!doc) return NextResponse.json({ error: 'Document not found' }, { status: 404 })
+
+    const { data: profile } = await supabaseAdmin.from('profiles').select('role').eq('id', user!.id).single()
+    const hasAccess = await verifyPropertyAccess(user!.id, doc.property_id, profile?.role || 'tenant')
+    if (!hasAccess) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
+    const { data, error: updateError } = await supabaseAdmin
         .from('documents').update(updates).eq('id', parseInt(docId)).select().single()
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    if (updateError) throw updateError
     return NextResponse.json({ data })
 }
+
+export const GET = withErrorHandler(getDocumentsHandler, 'GetDocuments')
+export const DELETE = withErrorHandler(deleteDocumentHandler, 'DeleteDocument')
+export const PATCH = withErrorHandler(patchDocumentHandler, 'PatchDocument')
