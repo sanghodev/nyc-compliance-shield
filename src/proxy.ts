@@ -3,7 +3,7 @@ import { createMiddlewareClient } from '@supabase/auth-helpers-nextjs'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
-export async function middleware(req: NextRequest) {
+export async function proxy(req: NextRequest) {
   const res = NextResponse.next()
   const supabase = createMiddlewareClient({ req, res })
 
@@ -37,7 +37,7 @@ export async function middleware(req: NextRequest) {
   return res
 }
 
-// Ensure middleware runs on relevant paths
+// Ensure proxy runs on relevant paths
 export const config = {
   matcher: [
     '/shield-admin-dash/:path*',
