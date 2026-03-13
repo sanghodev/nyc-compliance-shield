@@ -26,7 +26,12 @@ export function AuthModal({ isOpen, onClose, defaultRole, selectedTier, onLoginS
     const [accessCode, setAccessCode] = useState("")
     const [unit, setUnit] = useState("")
 
-    // ... (rest of simple state)
+    const roleInfo = {
+        manager: { title: "Management Portal", desc: "Manage your portfolio with AI-powered compliance." },
+        tenant: { title: "Tenant Portal", desc: "Access building services and submit requests." },
+        admin: { title: "Shield Admin", desc: "System-wide compliance monitoring and oversight." },
+        contractor: { title: "Pro Network", desc: "Join the verified contractor network via commissions." }
+    }[defaultRole] || { title: "Log In", desc: "Welcome back to NYC Compliance Shield." }
 
     const handleAuth = async () => {
         setLoading(true)
@@ -118,6 +123,11 @@ export function AuthModal({ isOpen, onClose, defaultRole, selectedTier, onLoginS
                             <div className={`w-16 h-16 rounded-2xl mx-auto flex items-center justify-center mb-4 ${defaultRole === 'manager' ? 'bg-blue-600' : defaultRole === 'contractor' ? 'bg-orange-600' : 'bg-green-600'}`}>
                                 {defaultRole === 'manager' ? <Building2 className="w-8 h-8 text-white" /> : <Home className="w-8 h-8 text-white" />}
                             </div>
+                            <div className="mb-2">
+                                <span className={`inline-block px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${defaultRole === 'manager' ? 'bg-blue-500/20 text-blue-400' : defaultRole === 'admin' ? 'bg-purple-500/20 text-purple-400' : 'bg-emerald-500/20 text-emerald-400'}`}>
+                                    {roleInfo.title}
+                                </span>
+                            </div>
                             <h2 className="text-2xl font-bold text-white mb-2">
                                 {isLogin ? 'Log In' : 'Create Account'}
                             </h2>
@@ -127,7 +137,7 @@ export function AuthModal({ isOpen, onClose, defaultRole, selectedTier, onLoginS
                                 </div>
                             )}
                             <p className="text-gray-400 text-sm">
-                                {defaultRole === 'contractor' ? "Join the Pro Network via Agent Commission." : "Manage your portfolio with AI."}
+                                {roleInfo.desc}
                             </p>
                         </div>
 
