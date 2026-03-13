@@ -39,43 +39,6 @@ export function AuthModal({ isOpen, onClose, defaultRole, selectedTier, onLoginS
                     password,
                 })
 
-                // DEV MODE: Auto-Register if user not found
-                if (error && error.message.includes("Invalid login credentials") && (email.includes("@test.com") || email.endsWith(".dev"))) {
-                    console.log("Dev user not found. Attempting to create...")
-                    const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-                        email,
-                        password,
-                        options: {
-                            data: {
-                                role: defaultRole,
-                                status: 'Active',
-                                membership_tier: selectedTier || 'Starter',
-                                full_name: defaultRole.charAt(0).toUpperCase() + defaultRole.slice(1) // e.g. "Manager"
-                            }
-                        }
-                    })
-
-                    if (signUpError) {
-                        if (signUpError.message.includes("User already registered")) {
-                            // This implies wrong password for existing user, we can't fix that easily without reset, 
-                            // but "Invalid login credentials" usually means not found OR wrong password.
-                            throw error // Re-throw original error
-                        }
-                        throw signUpError
-                    }
-
-                    if (signUpData.session) {
-                        onLoginSuccess(defaultRole)
-                        onClose()
-                        return
-                    } else if (signUpData.user) {
-                        // User created but maybe email confirmation required?
-                        // For dev, we usually disable confirming, but if not:
-                        setError("Dev Account Created. Please check (fake) email or just try logging in again if confirmation is off.")
-                        return
-                    }
-                }
-
                 if (error) throw error
                 const role = data.user.user_metadata.role || defaultRole
                 if (defaultRole === 'admin' && role !== 'admin') throw new Error("Access Denied.")
@@ -238,23 +201,6 @@ export function AuthModal({ isOpen, onClose, defaultRole, selectedTier, onLoginS
                                 </button>
                             </div>
                         </div>
-
-                        <div className="mt-6 pt-6 border-t border-zinc-800">
-                            <div className="text-xs text-zinc-500 font-mono mb-2">DEV MODE: TEST CREDENTIALS</div>
-                            <div className="space-y-1">
-                                <div className="flex justify-between text-xs text-zinc-400 bg-zinc-950 p-2 rounded cursor-pointer hover:bg-zinc-800 transition-colors"
-                                    onClick={() => {
-                                        const randomSuffix = Math.floor(Math.random() * 9000) + 1000
-                                        setEmail(defaultRole === 'manager' ? `manager${randomSuffix}@test.com` : defaultRole === 'tenant' ? `tenant${randomSuffix}@test.com` : defaultRole === 'contractor' ? `contractor${randomSuffix}@test.com` : `admin${randomSuffix}@test.com`)
-                                        setPassword('password123')
-                                    }}
-                                >
-                                    <span>{defaultRole.toUpperCase()} (Random New)</span>
-                                    <span className="font-mono">{defaultRole.toLowerCase()}####@test.com / password123</span>
-                                </div>
-                            </div>
-                        </div>
-
                     </motion.div>
                 </motion.div>
             )}

@@ -68,3 +68,41 @@ CREATE POLICY manager_all_property_documents ON documents FOR ALL TO authenticat
 CREATE POLICY tenant_read_property_documents ON documents FOR SELECT TO authenticated USING (
     property_id = (SELECT property_id FROM profiles WHERE id = auth.uid())
 );
+-- 5. AI CONSULTATIONS (Chat History)
+CREATE TABLE IF NOT EXISTS ai_consultations (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    agent_type TEXT NOT NULL,
+    title TEXT NOT NULL,
+    messages JSONB NOT NULL DEFAULT '[]'::jsonb,
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- Enable RLS
+ALTER TABLE ai_consultations ENABLE ROW LEVEL SECURITY;
+
+-- Users can read their own consultations
+CREATE POLICY user_read_own_consultations ON ai_consultations FOR SELECT TO authenticated USING (
+    auth.uid() = user_id
+);
+
+-- Users can insert their own consultations
+CREATE POLICY user_insert_own_consultations ON ai_consultations FOR INSERT TO authenticated WITH CHECK (
+    auth.uid() = user_id
+);
+
+-- Users can update their own consultations (e.g. title)
+CREATE POLICY user_update_own_consultations ON ai_consultations FOR UPDATE TO authenticated USING (
+    auth.uid() = user_id
+);
+
+-- Users can delete their own consultations
+CREATE POLICY user_delete_own_consultations ON ai_consultations FOR DELETE TO authenticated USING (
+    auth.uid() = user_id
+);
+
+-- Admin can read all consultations (for auditing/debugging)
+CREATE POLICY admin_read_all_consultations ON ai_consultations FOR SELECT TO authenticated USING (
+    (SELECT role FROM profiles WHERE id = auth.uid()) = 'admin'
+);
