@@ -787,7 +787,7 @@ function TenantDashboard({ onLogout, onRequestSubmit, userProfile }: { onLogout:
 }
 
 // --- VIOLATION ITEM COMPONENT (AI INSIGHT) ---
-function ViolationItem({ v, onGenerateAffidavit, isGenerating }: { v: any, onGenerateAffidavit?: (v: any) => void, isGenerating?: boolean }) {
+function ViolationItem({ v, onGenerateAffidavit, isGenerating, showToast }: { v: any, onGenerateAffidavit?: (v: any) => void, isGenerating?: boolean, showToast: (msg: string, type?: any) => void }) {
   const [expanded, setExpanded] = useState(false)
 
   // Simple AI Insight Logic (Mock)
@@ -893,7 +893,7 @@ function ViolationItem({ v, onGenerateAffidavit, isGenerating }: { v: any, onGen
 }
 
 // --- PROPERTY DETAILS MODAL (Public/Private) ---
-function PropertyDetailsModal({ property, cityData, onClose }: { property: Property, cityData: any, onClose: () => void }) {
+function PropertyDetailsModal({ property, cityData, onClose, showToast, userRole }: { property: Property, cityData: any, onClose: () => void, showToast: (msg: string, type?: any) => void, userRole: UserRole }) {
   const { generatePDF } = useGeneratePDF();
   const [affidavitHtml, setAffidavitHtml] = useState<string | null>(null);
   const [isGeneratingId, setIsGeneratingId] = useState<number | string | null>(null);
@@ -1046,7 +1046,7 @@ function PropertyDetailsModal({ property, cityData, onClose }: { property: Prope
                     {cityData?.violations?.length > 0 ? (
                       <div className="space-y-3">
                         {cityData.violations.slice(0, 5).map((v: any, i: number) => (
-                          <ViolationItem key={i} v={v} onGenerateAffidavit={handleGenerateAffidavit} isGenerating={isGeneratingId === (v.id || v.violationid)} />
+                          <ViolationItem key={i} v={v} onGenerateAffidavit={handleGenerateAffidavit} isGenerating={isGeneratingId === (v.id || v.violationid)} showToast={showToast} />
                         ))}
                       </div>
                     ) : <div className="text-zinc-600 text-sm italic">No open violations found.</div>}
@@ -2413,7 +2413,7 @@ export default function APP_ROOT() {
         publicSearchResults={publicSearchResults}
         selectPublicAddress={selectPublicAddress}
       />
-      {manageProp && <PropertyDetailsModal property={manageProp} cityData={propCityData} onClose={() => setManageProp(null)} />}
+      {manageProp && <PropertyDetailsModal property={manageProp} cityData={propCityData} onClose={() => setManageProp(null)} showToast={showToast} userRole={userRole} />}
       <AuthModal
         isOpen={!!showAuthModal}
         onClose={() => { setShowAuthModal(null); setSelectedTier("") }}
