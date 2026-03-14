@@ -893,7 +893,15 @@ function ViolationItem({ v, onGenerateAffidavit, isGenerating, showToast }: { v:
 }
 
 // --- PROPERTY DETAILS MODAL (Public/Private) ---
-function PropertyDetailsModal({ property, cityData, onClose, showToast, userRole }: { property: Property, cityData: any, onClose: () => void, showToast: (msg: string, type?: any) => void, userRole: UserRole }) {
+function PropertyDetailsModal({ property, cityData, onClose, showToast, userRole, onRegisterBuilding, onAuthRequired }: {
+  property: Property,
+  cityData: any,
+  onClose: () => void,
+  showToast: (msg: string, type?: any) => void,
+  userRole: UserRole,
+  onRegisterBuilding?: (addr: string) => void,
+  onAuthRequired?: () => void
+}) {
   const { generatePDF } = useGeneratePDF();
   const [affidavitHtml, setAffidavitHtml] = useState<string | null>(null);
   const [isGeneratingId, setIsGeneratingId] = useState<number | string | null>(null);
@@ -1038,10 +1046,33 @@ function PropertyDetailsModal({ property, cityData, onClose, showToast, userRole
                   </CardContent></Card>
                 </div>
 
-                <div className="flex justify-end pt-6 border-t border-slate-700/50">
-                  <Button variant="outline" onClick={onClose} className="mr-2 border-slate-700/50 text-gray-300 hover:text-white">Close</Button>
+                <div className="flex justify-end pt-6 border-t border-slate-700/50 gap-3">
+                  <Button variant="outline" onClick={onClose} className="border-slate-700/50 text-gray-300 hover:text-white">Close</Button>
+                  
+                  {!userRole ? (
+                    <Button 
+                      className="bg-indigo-500 hover:bg-blue-700 text-white shadow-lg shadow-blue-900/20 gap-2"
+                      onClick={() => {
+                        onClose();
+                        onAuthRequired?.();
+                      }}
+                    >
+                      <Shield className="w-4 h-4" /> Register
+                    </Button>
+                  ) : userRole === 'manager' || userRole === 'admin' ? (
+                    <Button 
+                      className="bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-900/20 gap-2"
+                      onClick={() => {
+                        onClose();
+                        onRegisterBuilding?.(property.address);
+                      }}
+                    >
+                      <Plus className="w-4 h-4" /> Register
+                    </Button>
+                  ) : null}
+
                   {userRole && (
-                    <Button className="bg-indigo-500 hover:bg-blue-700 text-white shadow-lg shadow-blue-900/20" onClick={() => showToast("Ownership verified. Redirecting...", "success")}>
+                    <Button className="bg-sky-500 hover:bg-sky-400 text-white shadow-lg shadow-sky-900/20" onClick={() => showToast("Ownership verified. Redirecting...", "success")}>
                       Manage Portfolio
                     </Button>
                   )}
@@ -2380,7 +2411,20 @@ export default function APP_ROOT() {
         publicSearchResults={publicSearchResults}
         selectPublicAddress={selectPublicAddress}
       />
-      {manageProp && <PropertyDetailsModal property={manageProp} cityData={propCityData} onClose={() => setManageProp(null)} showToast={showToast} userRole={userRole} />}
+      {manageProp && (
+        <PropertyDetailsModal 
+          property={manageProp} 
+          cityData={propCityData} 
+          onClose={() => setManageProp(null)} 
+          showToast={showToast} 
+          userRole={userRole} 
+          onAuthRequired={() => setShowAuthModal('manager')}
+          onRegisterBuilding={(addr) => {
+            setNewPropAddr(addr);
+            setShowAddProperty(true);
+          }}
+        />
+      )}
       <AuthModal
         isOpen={!!showAuthModal}
         onClose={() => { setShowAuthModal(null); setSelectedTier("") }}
