@@ -84,6 +84,7 @@ interface SearchResult {
   display_name: string
   lat: string
   lon: string
+  borough?: string
   bin?: string
   bbl?: string
 }
@@ -1920,6 +1921,7 @@ export default function APP_ROOT() {
               display_name: f.properties.label || 'Unknown Address',
               lat: f.geometry?.coordinates?.[1] || 0,
               lon: f.geometry?.coordinates?.[0] || 0,
+              borough: f.properties.borough || f.properties.borough_name || "",
               // Try standard fields for BIN (GeoSearch v2 structure: properties.addendum.pad.bin)
               bin: f.properties?.addendum?.pad?.bin || f.properties?.pad_bin || f.properties?.bin || "",
               bbl: f.properties?.addendum?.pad?.bbl || f.properties?.pad_bbl || f.properties?.bbl || ""
@@ -1953,8 +1955,9 @@ export default function APP_ROOT() {
           display_name: bestMatch.properties.label,
           lat: bestMatch.geometry.coordinates[1],
           lon: bestMatch.geometry.coordinates[0],
-          bin: bestMatch.properties.pad_bin,
-          bbl: bestMatch.properties.pad_bbl
+          borough: bestMatch.properties.borough || bestMatch.properties.borough_name,
+          bin: bestMatch.properties.pad_bin || bestMatch.properties.bin,
+          bbl: bestMatch.properties.pad_bbl || bestMatch.properties.bbl
         }
         // Auto-select the first result
         selectPublicAddress(result)
@@ -1980,7 +1983,7 @@ export default function APP_ROOT() {
     const tempProp: Property = {
       id: 0,
       address: result.display_name.split(',')[0],
-      borough: 'Unknown',
+      borough: detectBorough(result.display_name, result.borough),
       units: 0,
       status: 'Unknown',
       violations: 0,
@@ -2218,6 +2221,7 @@ export default function APP_ROOT() {
           display_name: f.properties.label || 'Unknown Address',
           lat: f.geometry?.coordinates?.[1] || 0,
           lon: f.geometry?.coordinates?.[0] || 0,
+          borough: f.properties.borough || f.properties.borough_name || "",
           bin: f.properties?.addendum?.pad?.bin || f.properties?.pad_bin || f.properties?.bin || "",
           bbl: f.properties?.addendum?.pad?.bbl || f.properties?.pad_bbl || f.properties?.bbl || ""
         }))
@@ -2230,18 +2234,44 @@ export default function APP_ROOT() {
     }
   }
 
+  // HELPER: Improved Borough Detection
+  const detectBorough = (displayName: string, boroughFromApi?: string): string => {
+    if (boroughFromApi) {
+      const b = boroughFromApi.toUpperCase();
+      if (b.includes("MANHATTAN") || b === "MN" || b === "1") return "Manhattan";
+      if (b.includes("BROOKLYN") || b === "BK" || b === "KINGS" || b === "3") return "Brooklyn";
+      if (b.includes("QUEENS") || b === "QN" || b === "4") return "Queens";
+      if (b.includes("BRONX") || b === "BX" || b === "2") return "Bronx";
+      if (b.includes("STATEN ISLAND") || b === "SI" || b === "RICHMOND" || b === "5") return "Staten Island";
+    }
+
+    const lowerName = displayName.toLowerCase();
+    
+    // Neighborhood Mapping
+    if (lowerName.includes("forest hills") || lowerName.includes("astoria") || lowerName.includes("flushing") || 
+        lowerName.includes("jamaica") || lowerName.includes("long island city") || lowerName.includes("rego park") ||
+        lowerName.includes("jackson heights") || lowerName.includes("sunnyside") || lowerName.includes("queens")) return "Queens";
+    
+    if (lowerName.includes("williamsburg") || lowerName.includes("bushwick") || lowerName.includes("bed-stuy") || 
+        lowerName.includes("dumbo") || lowerName.includes("brooklyn") || lowerName.includes("kings")) return "Brooklyn";
+    
+    if (lowerName.includes("riverdale") || lowerName.includes("fordham") || lowerName.includes("concourse") || 
+        lowerName.includes("bronx")) return "Bronx";
+
+    if (lowerName.includes("staten island") || lowerName.includes("richmond") || lowerName.includes("st. george")) return "Staten Island";
+    
+    // Default to Manhattan or check name
+    if (lowerName.includes("harlem") || lowerName.includes("chelsea") || lowerName.includes("soho") || 
+        lowerName.includes("village") || lowerName.includes("manhattan") || lowerName.includes("new york")) return "Manhattan";
+
+    return "Manhattan"; // Ultimate fallback
+  }
+
   // LOGIC: Select Address
   const selectAddress = (result: SearchResult) => {
     setNewPropAddr(result.display_name.split(',')[0]) // Keep it short for display
     setSelectedLocation({ lat: parseFloat(result.lat), lng: parseFloat(result.lon), bin: result.bin, bbl: result.bbl })
-
-    // Attempt to auto-detect borough from the full display name
-    const lowerName = result.display_name.toLowerCase();
-    if (lowerName.includes("queens")) setNewPropBorough("Queens");
-    else if (lowerName.includes("brooklyn") || lowerName.includes("kings")) setNewPropBorough("Brooklyn");
-    else if (lowerName.includes("bronx")) setNewPropBorough("Bronx");
-    else if (lowerName.includes("staten island") || lowerName.includes("richmond")) setNewPropBorough("Staten Island");
-    else setNewPropBorough("Manhattan"); // Fallback or explicit manhattan/new york
+    setNewPropBorough(detectBorough(result.display_name, result.borough));
   }
 
   const [proofDocument, setProofDocument] = useState<File | null>(null)
