@@ -172,11 +172,11 @@ function LandingPage({ onEnter, publicSearchQuery, handlePublicSearch, handleSea
 
   return (
     <div className="bg-black text-white overflow-x-hidden font-sans relative">
-      <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${isScrolled ? 'bg-black/90 backdrop-blur-md border-b border-white/10 py-3' : 'bg-transparent py-6'}`}>
+      <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${isScrolled ? 'bg-black/90 backdrop-blur-md border-b border-zinc-800 py-3' : 'bg-transparent py-6 border-b border-transparent'}`}>
         <div className="max-w-7xl mx-auto px-6 flex justify-between items-center">
           <div className="flex items-center gap-2 font-bold text-xl tracking-tight">
-            <Building2 className={`w-6 h-6 ${isScrolled ? 'text-sky-400' : 'text-white'}`} />
-            <span>Evereez<span className="text-sm text-slate-300 ml-3 hidden sm:inline-block font-normal">Everything Managed. Effortlessly.</span></span>
+            <Building2 className={`w-6 h-6 ${isScrolled ? 'text-sky-400' : 'text-slate-400'}`} />
+            <span className="text-slate-200">Evereez<span className="text-sm text-slate-400 ml-3 hidden sm:inline-block font-normal">Everything Managed. Effortlessly.</span></span>
           </div>
           <div className="flex items-center gap-4">
             <Button variant="ghost" className="text-gray-300 hover:text-white hover:bg-white/10 transition-colors" onClick={() => onEnter("tenant")}>Tenant Portal</Button>
@@ -1038,39 +1038,6 @@ function PropertyDetailsModal({ property, cityData, onClose, showToast, userRole
                   </CardContent></Card>
                 </div>
 
-                {/* 3. Detailed Lists */}
-                <div className="grid md:grid-cols-2 gap-8">
-                  {/* HPD Violations */}
-                  <div className="space-y-4">
-                    <h3 className="font-bold text-white text-lg flex items-center gap-2"><AlertTriangle className="w-5 h-5 text-red-500" /> Open Violations</h3>
-                    {cityData?.violations?.length > 0 ? (
-                      <div className="space-y-3">
-                        {cityData.violations.slice(0, 5).map((v: any, i: number) => (
-                          <ViolationItem key={i} v={v} onGenerateAffidavit={handleGenerateAffidavit} isGenerating={isGeneratingId === (v.id || v.violationid)} showToast={showToast} />
-                        ))}
-                      </div>
-                    ) : <div className="text-zinc-600 text-sm italic">No open violations found.</div>}
-                  </div>
-
-                  {/* 311 Complaints */}
-                  <div className="space-y-4">
-                    <h3 className="font-bold text-white text-lg flex items-center gap-2"><Phone className="w-5 h-5 text-amber-500" /> Recent 311 Complaints</h3>
-                    {cityData?.complaints?.length > 0 ? (
-                      <div className="space-y-3">
-                        {cityData.complaints.slice(0, 5).map((c: any, i: number) => (
-                          <div key={i} className="bg-slate-950 border border-slate-700/50 p-3 rounded-lg flex justify-between items-start hover:bg-slate-900/40 backdrop-blur-md transition-colors">
-                            <div>
-                              <div className="font-medium text-orange-400 text-sm mb-1">{c.complaint_type}: {c.descriptor}</div>
-                              <div className="text-xs text-slate-500">Created: {c.created_date && new Date(c.created_date).toLocaleDateString()}</div>
-                            </div>
-                            <Badge variant="outline" className={`text-[10px] ml-2 shrink-0 ${c.status === 'Open' ? 'text-emerald-500 border-emerald-500/30' : 'text-slate-500 border-slate-700/50'}`}>{c.status}</Badge>
-                          </div>
-                        ))}
-                      </div>
-                    ) : <div className="text-zinc-600 text-sm italic">No recent complaints found.</div>}
-                  </div>
-                </div>
-
                 <div className="flex justify-end pt-6 border-t border-slate-700/50">
                   <Button variant="outline" onClick={onClose} className="mr-2 border-slate-700/50 text-gray-300 hover:text-white">Close</Button>
                   {userRole && (
@@ -1280,7 +1247,7 @@ function AiHistoryModal({ isOpen, onClose, history, isLoading, onSelect }: { isO
 // --- MAIN APP ---
 export default function APP_ROOT() {
   const [userRole, setUserRole] = useState<UserRole>(null)
-  const [activeTab, setActiveTab] = useState('portfolio') // 'portfolio', 'map', 'reports', 'settings', 'll97', 'contractors'
+  const [activeTab, setActiveTab] = useState('dashboard') // 'dashboard', 'map', 'reports', 'settings', 'll97', 'contractors'
   const [isLoaded, setIsLoaded] = useState(false)
   const [userProfile, setUserProfile] = useState<any>(null)
   const [editProfile, setEditProfile] = useState<any>({}) // Local buffer for edits
@@ -1909,7 +1876,7 @@ export default function APP_ROOT() {
       setIsPublicSearching(true)
       try {
         // Use NYC Planning Labs GeoSearch SDK/API (v2)
-        const res = await fetch(`https://geosearch.planninglabs.nyc/v2/search?text=${encodeURIComponent(q)}`)
+        const res = await fetch(`/api/geosearch?text=${encodeURIComponent(q)}`)
         const data = await res.json()
 
         console.log("GeoSearch Raw Response:", data) // DEBUG LOG
@@ -1946,7 +1913,7 @@ export default function APP_ROOT() {
     setIsPublicSearching(true)
     try {
       // Execute an immediate search to get the best match
-      const res = await fetch(`https://geosearch.planninglabs.nyc/v2/search?text=${encodeURIComponent(publicSearchQuery)}`)
+      const res = await fetch(`/api/geosearch?text=${encodeURIComponent(publicSearchQuery)}`)
       const data = await res.json()
 
       if (data.features && data.features.length > 0) {
@@ -3428,7 +3395,7 @@ export default function APP_ROOT() {
         <div className="px-4 pb-2">
           <button
             onClick={async () => {
-              await supabase.auth.signOut()
+              try { await supabase.auth.signOut() } catch (err) {}
               setUserRole(null)
               window.location.href = "/"
             }}
@@ -3515,32 +3482,89 @@ export default function APP_ROOT() {
 
                 {/* EXPANDED METRICS GRID */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                  {[
-                    { label: 'Properties', value: properties.length.toString(), sub: 'Managed', icon: Building2, color: 'text-sky-400', bg: 'bg-sky-500/10' },
-                    { label: 'Active Requests', value: requests.filter(r => r.status === 'Pending').length.toString(), sub: 'Needs Review', icon: ClipboardList, color: 'text-orange-400', bg: 'bg-orange-500/10' },
-                    { label: 'Vault Docs', value: vaultDocuments.length.toString(), sub: 'Securely Stored', icon: FileText, color: 'text-indigo-400', bg: 'bg-indigo-500/10' },
-                    { label: 'Compliance', value: '94%', sub: 'Global Score', icon: ShieldCheck, color: 'text-emerald-400', bg: 'bg-emerald-500/10' }
-                  ].map((stat, idx) => (
-                    <motion.div 
-                      key={idx}
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: idx * 0.1 }}
-                      className="bg-slate-900/40 backdrop-blur-md border border-slate-700/50 p-6 rounded-3xl hover:border-slate-500/50 transition-all group"
-                    >
-                      <div className="flex justify-between items-start mb-4">
-                        <div className={`p-3 rounded-2xl ${stat.bg} ${stat.color} group-hover:scale-110 transition-transform`}>
-                          <stat.icon className="w-6 h-6" />
+                  <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-slate-900/40 backdrop-blur-md border border-slate-700/50 p-6 rounded-3xl group">
+                    <div className="flex justify-between items-start mb-4">
+                      <div className="p-3 rounded-2xl bg-sky-500/10 text-sky-400 group-hover:scale-110 transition-transform">
+                        <Building2 className="w-6 h-6" />
+                      </div>
+                      <Badge className="bg-emerald-500/10 text-emerald-500 border-0">{properties.filter(p => p.status === 'Good').length} Healthy</Badge>
+                    </div>
+                    <div className="space-y-1">
+                      <h3 className="text-3xl font-black text-white">{properties.length}</h3>
+                      <p className="text-slate-500 text-xs font-bold uppercase tracking-widest">Total Properties</p>
+                      <div className="flex gap-2 mt-2">
+                        <span className="text-[10px] text-amber-500 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">{properties.filter(p => p.status === 'Warning').length} Warning</span>
+                        <span className="text-[10px] text-red-500 bg-red-500/10 px-1.5 py-0.5 rounded border border-red-500/20">{properties.filter(p => p.status === 'Critical').length} Critical</span>
+                      </div>
+                    </div>
+                  </motion.div>
+
+                  <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="bg-slate-900/40 backdrop-blur-md border border-slate-700/50 p-6 rounded-3xl group">
+                    <div className="flex justify-between items-start mb-4">
+                      <div className="p-3 rounded-2xl bg-orange-500/10 text-orange-400 group-hover:scale-110 transition-transform">
+                        <ClipboardList className="w-6 h-6" />
+                      </div>
+                      <ArrowUpRight className="w-4 h-4 text-slate-600" />
+                    </div>
+                    <div className="space-y-1">
+                      <h3 className="text-3xl font-black text-white">{requests.filter(r => r.status === 'Pending').length}</h3>
+                      <p className="text-slate-500 text-xs font-bold uppercase tracking-widest">Active Requests</p>
+                      <p className="text-[10px] text-slate-600 font-medium italic">Needs Attention</p>
+                    </div>
+                  </motion.div>
+
+                  <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="bg-slate-900/40 backdrop-blur-md border border-slate-700/50 p-6 rounded-3xl group">
+                    <div className="flex justify-between items-start mb-4">
+                      <div className="p-3 rounded-2xl bg-indigo-500/10 text-indigo-400 group-hover:scale-110 transition-transform">
+                        <FileText className="w-6 h-6" />
+                      </div>
+                      <span className="text-[10px] text-sky-400 font-mono">ENCRYPTED</span>
+                    </div>
+                    <div className="space-y-1">
+                      <h3 className="text-3xl font-black text-white">{vaultDocuments.length}</h3>
+                      <p className="text-slate-500 text-xs font-bold uppercase tracking-widest">Vault Documents</p>
+                      <p className="text-[10px] text-slate-600 font-medium italic">{vaultDocuments.filter(d => d.ai_processed).length} AI Processed</p>
+                    </div>
+                  </motion.div>
+
+                  <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="bg-slate-900/40 backdrop-blur-md border border-slate-700/50 p-6 rounded-3xl group">
+                    <div className="flex justify-between items-start mb-4">
+                      <div className="p-3 rounded-2xl bg-emerald-500/10 text-emerald-400 group-hover:scale-110 transition-transform">
+                        <ShieldCheck className="w-6 h-6" />
+                      </div>
+                      <div className="w-12 h-1 bg-slate-800 rounded-full overflow-hidden">
+                        <div className="h-full bg-emerald-500" style={{ width: '94%' }}></div>
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <h3 className="text-3xl font-black text-white">94%</h3>
+                      <p className="text-slate-500 text-xs font-bold uppercase tracking-widest">Compliance Score</p>
+                      <p className="text-[10px] text-emerald-500 font-medium mt-1">+2.4% vs last month</p>
+                    </div>
+                  </motion.div>
+                </div>
+
+                {/* COMPLIANCE BREAKDOWN */}
+                <div className="space-y-6">
+                  <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                    <LayoutDashboard className="w-5 h-5 text-sky-400" /> Compliance Breakdown
+                  </h3>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    {[
+                      { agency: 'HPD', status: 'Healthy', color: 'text-emerald-400', bg: 'bg-emerald-500/10', count: properties.reduce((acc, p) => acc + (p.violations || 0), 0) + ' Violations' },
+                      { agency: 'DOB', status: 'Warning', color: 'text-amber-400', bg: 'bg-amber-500/10', count: '2 Open Complaints' },
+                      { agency: 'FDNY', status: 'Healthy', color: 'text-emerald-400', bg: 'bg-emerald-500/10', count: 'Active Permits' },
+                      { agency: 'Sanitation', status: 'Healthy', color: 'text-emerald-400', bg: 'bg-emerald-500/10', count: '0 Summon' }
+                    ].map((item, idx) => (
+                      <div key={idx} className="p-4 bg-slate-900/40 border border-slate-700/50 rounded-2xl flex flex-col items-center text-center">
+                        <div className={`w-10 h-10 rounded-xl ${item.bg} ${item.color} flex items-center justify-center font-black mb-3 text-xs`}>
+                          {item.agency}
                         </div>
-                        <ArrowUpRight className="w-4 h-4 text-slate-600 group-hover:text-white transition-colors" />
+                        <div className="text-sm font-bold text-white mb-1">{item.status}</div>
+                        <div className="text-[10px] text-slate-500 uppercase font-bold tracking-tighter">{item.count}</div>
                       </div>
-                      <div className="space-y-1">
-                        <h3 className="text-3xl font-black text-white">{stat.value}</h3>
-                        <p className="text-slate-500 text-xs font-bold uppercase tracking-widest">{stat.label}</p>
-                        <p className="text-[10px] text-slate-600 font-medium italic">{stat.sub}</p>
-                      </div>
-                    </motion.div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
 
                 {/* QUICK ACTIONS & RECENT ACTIVITY */}
