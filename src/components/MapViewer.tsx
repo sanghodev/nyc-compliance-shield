@@ -34,8 +34,11 @@ const createCustomIcon = (status: string, violations: number) => {
     let colorClass = "bg-emerald-500 border-emerald-300 shadow-[0_0_15px_rgba(16,185,129,0.7)]"
     let icon = <ShieldCheck className="w-4 h-4 text-white" />
 
-    if (violations > 0 || status === 'Critical' || status === 'Warning') {
-        colorClass = violations > 5 || status === 'Critical'
+    if (status === 'Pending Verification') {
+        colorClass = "bg-sky-400 border-sky-300 shadow-[0_0_15px_rgba(56,189,248,0.7)]"
+        icon = <Building2 className="w-4 h-4 text-white" />
+    } else if (violations > 0 || status === 'Critical' || status === 'Warning') {
+        colorClass = (violations > 5 || status === 'Critical')
             ? "bg-red-500 border-red-300 shadow-[0_0_15px_rgba(239,68,68,0.7)] animate-pulse"
             : "bg-amber-500 border-amber-300 shadow-[0_0_15px_rgba(245,158,11,0.7)]"
 
@@ -76,8 +79,12 @@ export default function MapViewer({ properties, onSelectProperty }: { properties
                         <div className="text-center">
                             <strong className="block mb-2 text-base text-white">{p.address}</strong>
                             <div className="flex justify-center mb-3">
-                                <span className={`text-xs px-2 py-0.5 rounded-full font-bold shadow-sm ${p.violations > 0 || p.status === 'Critical' || p.status === 'Warning' ? 'bg-red-500/20 text-red-400 border border-red-500/30' : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'}`}>
-                                    {p.violations > 0 ? `${p.violations} Open Violations` : 'Compliant'}
+                                <span className={`text-xs px-2 py-0.5 rounded-full font-bold shadow-sm ${
+                                    p.status === 'Pending Verification' ? 'bg-sky-500/20 text-sky-400 border border-sky-500/30' :
+                                    p.violations > 0 || p.status === 'Critical' || p.status === 'Warning' ? 'bg-red-500/20 text-red-400 border border-red-500/30' : 
+                                    'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                                }`}>
+                                    {p.status === 'Pending Verification' ? 'Pending Verification' : p.violations > 0 ? `${p.violations} Open Violations` : 'Compliant'}
                                 </span>
                             </div>
                             <button

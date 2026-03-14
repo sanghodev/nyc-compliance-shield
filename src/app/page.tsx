@@ -3678,17 +3678,41 @@ export default function APP_ROOT() {
                         </div>
                         <div className="h-[300px] rounded-3xl overflow-hidden border border-slate-700/50 shadow-inner shadow-black">
                           <MapViewer
-                            properties={properties.filter(p => !['Pending Verification', 'Rejected'].includes(p.status || ''))}
+                            properties={properties.filter(p => !['Rejected'].includes(p.status || ''))}
                             onSelectProperty={setManageProp}
                           />
                         </div>
                       </div>
                     ) : (
-                      <div className="p-12 text-center bg-slate-900/40 backdrop-blur-md border border-slate-700/50 rounded-3xl">
-                        <Building2 className="w-14 h-14 mx-auto text-slate-600 mb-4" />
-                        <h3 className="text-xl font-bold text-white mb-2">Portfolio Empty</h3>
-                        <p className="text-slate-400 mb-6">Start by adding your first NYC property to unlock the full compliance dashboard.</p>
-                        <Button onClick={() => setShowAddProperty(true)} className="bg-sky-500 hover:bg-sky-400 text-white shadow-lg shadow-sky-500/20 rounded-xl px-8 font-bold">Register Property</Button>
+                      <div className="bg-slate-900 grid md:grid-cols-3 gap-6 p-8 rounded-3xl border border-slate-800 shadow-2xl relative overflow-hidden">
+                        <div className="absolute top-0 right-0 p-4 opacity-10">
+                          <Building2 className="w-24 h-24" />
+                        </div>
+                        <div className="md:col-span-3 mb-4">
+                          <h3 className="text-2xl font-bold text-white mb-2">Welcome to NYC Compliance Shield</h3>
+                          <p className="text-slate-400">Complete these 3 steps to secure your first building.</p>
+                        </div>
+                        
+                        <div className="space-y-4 p-6 bg-slate-950/50 rounded-2xl border border-slate-800/50 hover:border-sky-500/30 transition-all group">
+                          <div className="w-10 h-10 rounded-full bg-sky-500/20 text-sky-400 flex items-center justify-center font-bold mb-2 group-hover:bg-sky-500 group-hover:text-white transition-all">1</div>
+                          <h4 className="font-bold text-white">Register Building</h4>
+                          <p className="text-xs text-slate-500 leading-relaxed">Enter your property address to fetch live NYC HPD & DOB data instantly.</p>
+                          <Button size="sm" onClick={() => setShowAddProperty(true)} className="w-full bg-sky-500 hover:bg-sky-400 text-white font-bold">Add Property</Button>
+                        </div>
+
+                        <div className="space-y-4 p-6 bg-slate-950/50 rounded-2xl border border-slate-800/50 hover:border-indigo-500/30 transition-all group opacity-60">
+                          <div className="w-10 h-10 rounded-full bg-indigo-500/20 text-indigo-400 flex items-center justify-center font-bold mb-2">2</div>
+                          <h4 className="font-bold text-white">Upload Documents</h4>
+                          <p className="text-xs text-slate-500 leading-relaxed">Securely store insurance, leases, and local law LL84/LL97 records in the Vault.</p>
+                          <Button size="sm" variant="outline" disabled className="w-full border-slate-700 text-slate-500">Locked</Button>
+                        </div>
+
+                        <div className="space-y-4 p-6 bg-slate-950/50 rounded-2xl border border-slate-800/50 hover:border-emerald-500/30 transition-all group opacity-40">
+                          <div className="w-10 h-10 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold mb-2">3</div>
+                          <h4 className="font-bold text-white">Invite Tenants</h4>
+                          <p className="text-xs text-slate-500 leading-relaxed">Grant access to residents to submit maintenance requests directly via AI.</p>
+                          <Button size="sm" variant="outline" disabled className="w-full border-slate-700 text-slate-500">Locked</Button>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -3891,14 +3915,47 @@ export default function APP_ROOT() {
                   <Card key={p.id} className="bg-card/50 overflow-hidden group">
                     <div className="h-48 relative"><img src={p.image || 'https://images.unsplash.com/photo-1496442226666-8d4d0e62e6e9?auto=format&fit=crop&q=80&w=400&h=300'} onError={(e) => { e.currentTarget.src = 'https://images.unsplash.com/photo-1496442226666-8d4d0e62e6e9?auto=format&fit=crop&q=80&w=400&h=300'; e.currentTarget.onerror = null; }} className="w-full h-full object-cover" /><Badge className="absolute top-2 right-2">{p.status}</Badge></div>
                     <CardContent className="p-4">
-                      <h3 className="font-bold">{p.address}</h3>
-                      <p className="text-sm text-muted-foreground mb-2">{p.units} Units</p>
-                      <div className="flex items-center gap-2 mb-4 text-xs text-slate-500 bg-slate-900/40 backdrop-blur-md/50 p-2 rounded border border-slate-700/50">
-                        <Lock className="w-3 h-3" />
-                        Access Code: <span className="text-zinc-300 font-mono font-bold tracking-widest">{p.access_code || 'N/A'}</span>
+                      <div className="flex justify-between items-start mb-2">
+                        <h3 className="font-bold truncate pr-2" title={p.address}>{p.address}</h3>
+                        <div className={`w-3 h-3 rounded-full shrink-0 mt-1.5 ${
+                          p.status === 'Critical' ? 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]' :
+                          p.status === 'Warning' ? 'bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.5)]' :
+                          p.status === 'Pending Verification' ? 'bg-sky-400' :
+                          'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]'
+                        }`} />
                       </div>
+                      
+                      <div className="flex justify-between items-center text-sm text-muted-foreground mb-3">
+                        <span>{p.units} Units • {p.borough}</span>
+                        {p.violations > 0 && (
+                          <span className="text-amber-500 font-bold flex items-center gap-1">
+                            <AlertTriangle className="w-3 h-3" /> {p.violations}
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="flex items-center justify-between gap-2 mb-4 text-xs text-slate-500 bg-slate-900/60 backdrop-blur-md p-2 rounded-lg border border-slate-700/50 group/code">
+                        <div className="flex items-center gap-2">
+                          <Lock className="w-3 h-3 text-slate-400" />
+                          <span className="text-zinc-400">Access:</span>
+                          <span className="text-white font-mono font-bold tracking-widest">{p.access_code || 'N/A'}</span>
+                        </div>
+                        <Button 
+                          size="sm" 
+                          variant="ghost" 
+                          className="h-6 w-6 p-0 hover:bg-sky-500/20 hover:text-sky-400 opacity-0 group-hover/code:opacity-100 transition-opacity"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigator.clipboard.writeText(p.access_code || '');
+                            showToast("Access Code Copied!");
+                          }}
+                        >
+                          <ClipboardList className="w-3 h-3" />
+                        </Button>
+                      </div>
+
                       <div className="flex gap-2">
-                        <Button className="flex-1" variant="outline" onClick={() => setManageProp(p)}>Manage Details</Button>
+                        <Button className="flex-1 bg-slate-800 border-slate-700 hover:bg-slate-700 text-white" variant="outline" onClick={() => setManageProp(p)}>Manage Details</Button>
                         <Button
                           size="icon"
                           variant="ghost"
@@ -4872,7 +4929,7 @@ export default function APP_ROOT() {
             )}
 
             {/* MAP */}
-            {activeTab === 'map' && <div className="h-full rounded-xl overflow-hidden border border-border"><MapViewer properties={properties.filter(p => !['Pending Verification', 'Rejected'].includes(p.status || ''))} onSelectProperty={setManageProp} /></div>}
+            {activeTab === 'map' && <div className="h-full rounded-xl overflow-hidden border border-border"><MapViewer properties={properties.filter(p => !['Rejected'].includes(p.status || ''))} onSelectProperty={setManageProp} /></div>}
           </div>
         </ErrorBoundary>
         <DocumentPreviewModal doc={selectedDoc} onClose={() => setSelectedDoc(null)} />
@@ -5585,7 +5642,7 @@ export default function APP_ROOT() {
                       <h4 className="text-white font-bold text-md mb-1 group-hover:text-sky-300 transition-colors">Growth Plan</h4>
                       <div className="text-2xl font-bold text-white mb-2">$99<span className="text-sm font-normal text-slate-400">/mo</span></div>
                       <ul className="text-xs text-slate-300 space-y-1.5">
-                        <li className="flex items-center gap-1.5"><CheckCircle className="w-3 h-3 text-emerald-500" /> Up to 20 Units</li>
+                        <li className="flex items-center gap-1.5"><CheckCircle className="w-3 h-3 text-emerald-500" /> Up to 20 Properties</li>
                         <li className="flex items-center gap-1.5"><CheckCircle className="w-3 h-3 text-emerald-500" /> Instant AI Affidavits</li>
                         <li className="flex items-center gap-1.5"><CheckCircle className="w-3 h-3 text-emerald-500" /> Financial Forecasting</li>
                       </ul>
@@ -5597,7 +5654,7 @@ export default function APP_ROOT() {
                     <div className="p-4 rounded-xl bg-purple-900/10 border border-purple-500/30 hover:bg-purple-900/20 transition-colors cursor-pointer group relative overflow-hidden">
                       <div className="absolute top-0 right-0 bg-gradient-to-r from-purple-500 to-fuchsia-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-bl-lg">PREMIUM</div>
                       <h4 className="text-white font-bold text-md mb-1 group-hover:text-purple-300 transition-colors">Premium Enterprise</h4>
-                      <p className="text-xs text-slate-400 mb-2">Need more than 20 units? Get custom pricing and white-glove onboarding for large portfolios.</p>
+                      <p className="text-xs text-slate-400 mb-2">Need more than 20 properties? Get custom pricing and white-glove onboarding for large portfolios.</p>
                       <Button variant="outline" className="w-full mt-1 border-purple-500/50 text-purple-300 hover:bg-purple-500/20 h-8 text-xs font-bold" onClick={() => alert("Contact sales placeholder")}>Contact Sales</Button>
                     </div>
                   )}
