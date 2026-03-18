@@ -10,7 +10,7 @@ import {
   Wrench, CheckCircle, AlertTriangle, Filter, CreditCard,
   ArrowUpRight, Activity, X, MessageSquare, Send,
   Shield, ShieldCheck, Zap, BarChart3, ChevronDown, ChevronUp,
-  Sparkles, ArrowRight, Scale, Flame, HardHat, Calendar, ArrowUpCircle, Download, Leaf, Clock, ClipboardList, PenTool, Smartphone, Phone, Lock, Trash2, Home, Copy, Check, ShieldAlert, History as HistoryIcon, LogOut
+  Sparkles, ArrowRight, Scale, Flame, HardHat, Calendar, ArrowUpCircle, Download, Leaf, Clock, ClipboardList, PenTool, Smartphone, Phone, Lock, Trash2, Home, Copy, Check, ShieldAlert, History as HistoryIcon, LogOut, DollarSign, Briefcase, TrendingUp
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -26,6 +26,7 @@ import { AuthModal } from "@/components/AuthModal"
 import { useGeneratePDF } from "@/hooks/useGeneratePDF"
 import AffidavitTemplate from "@/components/AffidavitTemplate"
 import ReactMarkdown from 'react-markdown'
+import { AssetHealthScorecard } from "@/components/AssetHealthScorecard"
 
 // Error Boundary for debugging silent crashes
 class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean; error: Error | null }> {
@@ -78,6 +79,8 @@ interface Property {
   bbl?: string
   manager_id?: string
   verification_document_url?: string
+  market_value?: number
+  rent_estimate?: number
 }
 
 interface SearchResult {
@@ -194,15 +197,14 @@ function LandingPage({ onEnter, publicSearchQuery, handlePublicSearch, handleSea
         </motion.div>
         <motion.div style={{ opacity }} className="relative z-20 text-center space-y-8 px-4 max-w-5xl mx-auto">
           <motion.div initial={{ opacity: 0, y: 50 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 1 }}>
-            <Badge className="mb-4 bg-white/10 text-white hover:bg-white/20 border-white/20 px-4 py-1 text-sm transition-colors">🚀 Now servicing 500+ NYC Buildings</Badge>
-            <h1 className="text-6xl md:text-8xl font-bold tracking-tighter bg-clip-text text-transparent bg-gradient-to-b from-white to-white/60 leading-[1.1] pb-4">
+            <Badge className="mb-4 bg-indigo-500/20 text-sky-400 hover:bg-sky-500/30 border-sky-500/30 px-4 py-1.5 text-xs font-bold transition-all backdrop-blur-md">
+              <Sparkles className="w-3 h-3 mr-2" /> AI-POWERED NYC COMPLIANCE & INVESTMENT INTELLIGENCE
+            </Badge>
+            <h1 className="text-6xl md:text-8xl font-black tracking-tighter bg-clip-text text-transparent bg-gradient-to-b from-white via-white to-white/40 leading-[1] pb-6">
               Smart Buildings.<br />Total Ease.
             </h1>
-            <p className="text-xl md:text-2xl text-sky-400 font-bold mb-4">
-              Powered by Evereez.
-            </p>
-            <p className="text-lg md:text-xl text-slate-200 max-w-2xl mx-auto mb-8">
-              The first AI-driven platform that turns complex NYC compliance into absolute simplicity.
+            <p className="text-xl md:text-2xl text-slate-400 max-w-3xl mx-auto mb-10 leading-relaxed font-medium">
+              The first professional platform that transforms complex <span className="text-sky-400 font-bold italic">NYC Local Laws</span> into measurable <span className="text-emerald-400 font-bold italic">Financial ROI</span>.
             </p>
           </motion.div>
 
@@ -255,51 +257,78 @@ function LandingPage({ onEnter, publicSearchQuery, handlePublicSearch, handleSea
         </motion.div>
       </section>
 
-      {/* 2. STATS BAR */}
-      <div className="border-y border-white/10 bg-black/50 backdrop-blur-sm py-8 relative z-20">
-        <div className="max-w-7xl mx-auto px-6 grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
+      {/* 2. INTELLIGENCE BAR */}
+      <div className="border-y border-white/10 bg-slate-950/80 backdrop-blur-xl py-10 relative z-20">
+        <div className="max-w-7xl mx-auto px-6 grid grid-cols-2 md:grid-cols-4 gap-12 text-center items-center">
           {[
-            { val: "$2M+", label: "Fines Prevented" },
-            { val: "24/7", label: "AI Monitoring" },
-            { val: "15min", label: "Avg. Response Time" },
-            { val: "500+", label: "Buildings Secured" }
+            { val: "RentCast Live", label: "Property Valuation", icon: DollarSign },
+            { val: "US Census", label: "Neighborhood DNA", icon: Search },
+            { val: "HPD / DOB", label: "Real-time API Sync", icon: Activity },
+            { val: "AI Counsel", label: "Legal Automation", icon: Sparkles }
           ].map((stat, i) => (
-            <div key={i} className="space-y-1">
-              <div className="text-3xl font-bold text-white">{stat.val}</div>
-              <div className="text-sm text-slate-500 uppercase tracking-widest">{stat.label}</div>
+            <div key={i} className="space-y-2 group">
+              <div className="flex flex-col items-center">
+                <div className="p-2 rounded-lg bg-white/5 group-hover:bg-indigo-500/20 transition-colors mb-2">
+                  <stat.icon className="w-4 h-4 text-sky-400" />
+                </div>
+                <div className="text-2xl font-black text-white tracking-tight">{stat.val}</div>
+                <div className="text-[10px] text-slate-500 uppercase font-black tracking-[0.2em] mt-1">{stat.label}</div>
+              </div>
             </div>
           ))}
         </div>
       </div>
 
       {/* 3. PROBLEM / SOLUTION */}
-      <section className="py-32 px-6 bg-slate-950">
-        <div className="max-w-4xl mx-auto text-center space-y-16">
-          <div className="space-y-4">
-            <h2 className="text-4xl md:text-5xl font-bold text-white">Why Evereez?</h2>
-            <p className="text-xl text-slate-400">Old ways vs. The New Way</p>
+      <section className="py-32 px-6 bg-slate-950 relative overflow-hidden">
+        <div className="absolute top-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-slate-800 to-transparent"></div>
+        <div className="max-w-6xl mx-auto space-y-20">
+          <div className="text-center space-y-4">
+            <h2 className="text-4xl md:text-6xl font-black text-white tracking-tighter">The Evolution of Management.</h2>
+            <p className="text-lg text-slate-500 uppercase font-bold tracking-[0.3em]">Old Friction vs. Modern Intelligence</p>
           </div>
 
-          <div className="grid md:grid-cols-2 gap-12">
-            <div className="border border-red-500/20 bg-red-500/5 rounded-2xl p-8 space-y-6">
-              <div className="flex items-center gap-3 text-red-500 font-bold text-xl"><X className="w-6 h-6" /> Traditional Way</div>
-              <ul className="space-y-4 text-left text-slate-400">
-                <li className="flex gap-3"><AlertTriangle className="w-5 h-5 text-red-500 shrink-0" /> Missed violation hearings & fines</li>
-                <li className="flex gap-3"><FileText className="w-5 h-5 text-red-500 shrink-0" /> Endless manual paperwork</li>
-                <li className="flex gap-3"><Phone className="w-5 h-5 text-red-500 shrink-0" /> Angry late-night tenant calls</li>
-                <li className="flex gap-3"><Clock className="w-5 h-5 text-red-500 shrink-0" /> Days wasted finding contractors</li>
+          <div className="grid md:grid-cols-2 gap-8">
+            {/* The Old Way */}
+            <div className="group border border-white/5 bg-white/[0.02] rounded-3xl p-10 space-y-8 grayscale opacity-60 hover:grayscale-0 hover:opacity-100 transition-all duration-500 relative">
+              <div className="absolute top-6 right-8 text-xs font-bold text-red-500/40 uppercase tracking-widest">Legacy Systems</div>
+              <div className="w-14 h-14 rounded-2xl bg-red-500/10 flex items-center justify-center">
+                <HistoryIcon className="w-7 h-7 text-red-500" />
+              </div>
+              <div className="space-y-2">
+                <h3 className="text-2xl font-bold text-white">Traditional Management</h3>
+                <p className="text-slate-500 text-sm">Reactive, fragmented, and prone to human error.</p>
+              </div>
+              <ul className="space-y-5 text-slate-400">
+                <li className="flex gap-4 items-start"><AlertTriangle className="w-5 h-5 text-red-500/50 shrink-0 mt-0.5" /> <div><b>Missed Deadlines:</b> Fines accumulate while PDFs sit in inbox.</div></li>
+                <li className="flex gap-4 items-start"><Phone className="w-5 h-5 text-red-500/50 shrink-0 mt-0.5" /> <div><b>Tenant Friction:</b> Endless calls for basic repair updates.</div></li>
+                <li className="flex gap-4 items-start"><Briefcase className="w-5 h-5 text-red-500/50 shrink-0 mt-0.5" /> <div><b>Vetting Lag:</b> Days wasted finding reliable, insured contractors.</div></li>
+                <li className="flex gap-4 items-start"><Lock className="w-5 h-5 text-red-500/50 shrink-0 mt-0.5" /> <div><b>Data Silos:</b> No link between compliance and building value.</div></li>
               </ul>
             </div>
 
-            <div className="border border-emerald-500/20 bg-emerald-500/5 rounded-2xl p-8 space-y-6 relative overflow-hidden">
-              <div className="absolute top-0 right-0 p-4 opacity-10"><Shield className="w-40 h-40 text-emerald-500" /></div>
-              <div className="flex items-center gap-3 text-emerald-500 font-bold text-xl"><CheckCircle className="w-6 h-6" /> Evereez Way</div>
-              <ul className="space-y-4 text-left text-gray-300">
-                <li className="flex gap-3"><Zap className="w-5 h-5 text-emerald-500 shrink-0" /> Proactive AI alerts before fines hit</li>
-                <li className="flex gap-3"><PenTool className="w-5 h-5 text-emerald-500 shrink-0" /> 1-Click Affidavit Generation</li>
-                <li className="flex gap-3"><Smartphone className="w-5 h-5 text-emerald-500 shrink-0" /> Self-service Tenant Mobile App</li>
-                <li className="flex gap-3"><Users className="w-5 h-5 text-emerald-500 shrink-0" /> Instant access to vetted Pros</li>
+            {/* The Evereez Way */}
+            <div className="group border border-sky-500/30 bg-sky-500/5 rounded-3xl p-10 space-y-8 relative overflow-hidden shadow-[0_0_50px_rgba(56,189,248,0.1)]">
+              <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity"><Shield className="w-64 h-64 text-sky-400" /></div>
+              <div className="absolute top-6 right-8 text-xs font-bold text-sky-400 uppercase tracking-widest">AI Intelligence</div>
+              <div className="w-14 h-14 rounded-2xl bg-sky-400 flex items-center justify-center shadow-lg shadow-sky-900/40">
+                <ShieldCheck className="w-7 h-7 text-white" />
+              </div>
+              <div className="space-y-2">
+                <h3 className="text-2xl font-bold text-white">The Evereez Advantage</h3>
+                <p className="text-sky-300/60 text-sm">Proactive, automated, and value-driven.</p>
+              </div>
+              <ul className="space-y-5 text-slate-200">
+                <li className="flex gap-4 items-start"><Zap className="w-5 h-5 text-sky-400 shrink-0 mt-0.5" /> <div><b>Auto-Pilot Compliance:</b> AI detects violations and alerts you in seconds.</div></li>
+                <li className="flex gap-4 items-start"><Smartphone className="w-5 h-5 text-sky-400 shrink-0 mt-0.5" /> <div><b>Self-Service Portal:</b> Residents manage their own needs via mobile app.</div></li>
+                <li className="flex gap-4 items-start"><Users className="w-5 h-5 text-sky-400 shrink-0 mt-0.5" /> <div><b>Instant Dispatch:</b> Pre-vetted NYC Pros ready at the click of a button.</div></li>
+                <li className="flex gap-4 items-start"><TrendingUp className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" /> <div><b>Equity Extraction:</b> Unlock building value by resolving compliance risk.</div></li>
               </ul>
+              <div className="pt-4">
+                <div className="inline-flex items-center gap-2 text-[10px] font-bold text-sky-400 py-1.5 px-3 rounded-full bg-sky-400/10 border border-sky-400/20 uppercase tracking-widest">
+                  Average 3.2x ROI in Year 1
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -365,28 +394,99 @@ function LandingPage({ onEnter, publicSearchQuery, handlePublicSearch, handleSea
         </div>
       </section>
 
-      {/* 4. FEATURE DEEP DIVE 1: MAP */}
-      <section className="py-24 px-6 flex justify-center bg-black border-t border-zinc-900">
-        <div className="max-w-6xl w-full grid md:grid-cols-2 gap-16 items-center">
-          <motion.div initial={{ opacity: 0, x: -50 }} whileInView={{ opacity: 1, x: 0 }} transition={{ duration: 0.8 }} className="space-y-6">
-            <Badge className="bg-indigo-500/20 text-sky-300 mb-2 hover:bg-indigo-500/30">God-Mode Visibility</Badge>
-            <h2 className="text-4xl md:text-5xl font-bold">See every issue.<br /><span className="text-slate-500">In Real-Time.</span></h2>
-            <p className="text-lg text-slate-400 leading-relaxed">
-              Our 3D Satellite Map integrates directly with <span className="text-white font-bold">5+ NYC Government APIs</span>. Monitor <span className="text-sky-300">Violations</span>, <span className="text-red-400">Litigation</span>, <span className="text-orange-400">311 Complaints</span>, <span className="text-emerald-400">Registrations</span>, and <span className="text-yellow-400">Charges</span> in real-time.
+      {/* 4. FEATURE DEEP DIVE 1: PORTFOLIO HEATMAP */}
+      <section className="py-32 px-6 bg-black border-t border-zinc-900 overflow-hidden">
+        <div className="max-w-7xl mx-auto grid md:grid-cols-2 gap-20 items-center">
+          <motion.div initial={{ opacity: 0, x: -50 }} whileInView={{ opacity: 1, x: 0 }} transition={{ duration: 0.8 }} className="space-y-8">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-black uppercase tracking-[0.2em]">
+              <MapIcon className="w-3 h-3" /> Advanced Yield Mapping
+            </div>
+            <h2 className="text-5xl md:text-6xl font-black text-white tracking-tighter leading-[1.1]">Navigate your<br />Portfolio by ROI.</h2>
+            <p className="text-xl text-slate-400 leading-relaxed font-medium">
+              Switch between <span className="text-sky-400">Compliance Mode</span> and <span className="text-emerald-400">Investment Mode</span>. Our proprietary engine combines NYC violation risk with real-time rental yield data to visualize hidden equity in your buildings.
             </p>
-            <div className="flex flex-col gap-3 pt-4">
-              <div className="flex items-center gap-3 text-gray-300 bg-slate-900/40 backdrop-blur-md p-3 rounded-lg border border-slate-700/50"><MapIcon className="text-sky-400" /> Live NYC DOB/HPD Data Sync</div>
-              <div className="flex items-center gap-3 text-gray-300 bg-slate-900/40 backdrop-blur-md p-3 rounded-lg border border-slate-700/50"><Activity className="text-emerald-500" /> Portfolio Health Score</div>
+            <div className="grid grid-cols-1 gap-4 pt-4">
+              <div className="flex items-center gap-4 bg-slate-900/50 p-5 rounded-2xl border border-white/5 group hover:border-emerald-500/50 transition-all">
+                <div className="w-12 h-12 rounded-xl bg-emerald-500/10 flex items-center justify-center group-hover:bg-emerald-500 transition-colors">
+                  <TrendingUp className="w-6 h-6 text-emerald-500 group-hover:text-black" />
+                </div>
+                <div>
+                  <h4 className="font-bold text-white">Yield Heat-Mapping</h4>
+                  <p className="text-xs text-slate-500">Identify high-cap rate properties instantly.</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-4 bg-slate-900/50 p-5 rounded-2xl border border-white/5 group hover:border-sky-400/50 transition-all">
+                <div className="w-12 h-12 rounded-xl bg-sky-400/10 flex items-center justify-center group-hover:bg-sky-400 transition-colors">
+                  <ShieldCheck className="w-6 h-6 text-sky-400 group-hover:text-black" />
+                </div>
+                <div>
+                  <h4 className="font-bold text-white">Risk Exposure Index</h4>
+                  <p className="text-xs text-slate-500">Live HPD/DOB violation overlay.</p>
+                </div>
+              </div>
             </div>
           </motion.div>
-          <motion.div initial={{ opacity: 0, scale: 0.9 }} whileInView={{ opacity: 1, scale: 1 }} transition={{ duration: 0.8 }} className="relative group">
-            <div className="absolute -inset-2 bg-gradient-to-r from-indigo-500 to-cyan-500 rounded-2xl blur-xl opacity-20 group-hover:opacity-40 transition-opacity"></div>
-            <img src="https://images.unsplash.com/photo-1554224155-6726b3ff858f?auto=format&fit=crop&w=800" className="relative rounded-xl border border-white/10 shadow-[0_0_40px_rgba(0,0,0,0.5)] z-10" alt="Map Interface" />
-            {/* UI Overlay Mockup */}
-            <div className="absolute bottom-4 right-4 bg-black/80 backdrop-blur p-4 rounded-lg border border-white/10 z-20 shadow-xl hidden md:block">
-              <div className="flex items-center gap-2 mb-2"><div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div> <span className="text-xs font-bold">New Violation Detected</span></div>
-              <div className="text-xs text-slate-400">123 Broadway: Elevators</div>
+          <motion.div initial={{ opacity: 0, scale: 0.9, x: 50 }} whileInView={{ opacity: 1, scale: 1, x: 0 }} transition={{ duration: 0.8 }} className="relative">
+            <div className="absolute -inset-10 bg-emerald-500/20 rounded-full blur-[120px] opacity-20 animate-pulse"></div>
+            <div className="relative rounded-3xl overflow-hidden border border-white/10 shadow-[0_0_80px_rgba(0,0,0,0.8)] bg-slate-900 p-2">
+               <div className="bg-black/50 backdrop-blur-md rounded-2xl overflow-hidden aspect-[4/3] relative">
+                  <img src="https://images.unsplash.com/photo-1554224155-6726b3ff858f?auto=format&fit=crop&w=1200" className="w-full h-full object-cover opacity-80" alt="Heatmap Interface" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent"></div>
+                  {/* Mock Heatmap Indicators */}
+                  <div className="absolute top-1/4 left-1/3 w-12 h-12 bg-emerald-500/40 rounded-full blur-xl animate-pulse"></div>
+                  <div className="absolute top-1/2 left-2/3 w-16 h-16 bg-emerald-500/30 rounded-full blur-2xl animate-pulse"></div>
+                  <div className="absolute bottom-10 left-10 p-4 bg-black/90 backdrop-blur border border-white/10 rounded-xl max-w-[200px]">
+                    <div className="text-[10px] font-bold text-emerald-400 uppercase mb-1">High Value Zone</div>
+                    <div className="text-sm font-bold text-white">Financial District (S)</div>
+                    <div className="text-[10px] text-slate-500 mt-1">Avg. Yield: 6.8% | Risk: Low</div>
+                  </div>
+               </div>
             </div>
+          </motion.div>
+        </div>
+      </section>
+
+      {/* 5. FEATURE DEEP DIVE 2: NEIGHBORHOOD DNA */}
+      <section className="py-32 px-6 bg-slate-950">
+        <div className="max-w-7xl mx-auto grid md:grid-cols-2 gap-20 items-center">
+          <motion.div initial={{ opacity: 0, scale: 0.9, x: -50 }} whileInView={{ opacity: 1, scale: 1, x: 0 }} transition={{ duration: 0.8 }} className="order-2 md:order-1 relative">
+            <div className="absolute -inset-10 bg-indigo-500/20 rounded-full blur-[120px] opacity-20"></div>
+            <div className="grid grid-cols-2 gap-4">
+              <Card className="bg-slate-900/80 border-white/10 p-6 shadow-2xl backdrop-blur-md">
+                <div className="text-[10px] font-bold text-sky-400 uppercase tracking-widest mb-4">ACS Census Data</div>
+                <div className="text-3xl font-black text-white">$92.4k</div>
+                <div className="text-[10px] text-slate-500 mt-2 font-bold italic">Median HH Income</div>
+              </Card>
+              <Card className="bg-slate-900/80 border-white/10 p-6 shadow-2xl backdrop-blur-md translate-y-8">
+                <div className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest mb-4">Market Valuation</div>
+                <div className="text-3xl font-black text-white">$1.2M</div>
+                <div className="text-[10px] text-slate-500 mt-2 font-bold italic">Est. Asset Value</div>
+              </Card>
+              <Card className="bg-slate-900/80 border-white/10 p-6 shadow-2xl backdrop-blur-md">
+                <div className="text-[10px] font-bold text-amber-500 uppercase tracking-widest mb-4">Risk Exposure</div>
+                <div className="text-3xl font-black text-white">74 / 100</div>
+                <div className="text-[10px] text-slate-500 mt-2 font-bold italic">Compliance Health</div>
+              </Card>
+              <Card className="bg-slate-900/80 border-white/10 p-6 shadow-2xl backdrop-blur-md translate-y-8">
+                <div className="text-[10px] font-bold text-purple-400 uppercase tracking-widest mb-4">Rent Alpha</div>
+                <div className="text-3xl font-black text-white">+12.4%</div>
+                <div className="text-[10px] text-slate-500 mt-2 font-bold italic">Above Neighborhood Avg</div>
+              </Card>
+            </div>
+          </motion.div>
+          <motion.div initial={{ opacity: 0, x: 50 }} whileInView={{ opacity: 1, x: 0 }} transition={{ duration: 0.8 }} className="order-1 md:order-2 space-y-8">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-[10px] font-black uppercase tracking-[0.2em]">
+               <Search className="w-3 h-3" /> US Census Integration
+            </div>
+            <h2 className="text-5xl md:text-6xl font-black text-white tracking-tighter leading-[1.1]">Know the DNA of<br />your Assets.</h2>
+            <p className="text-xl text-slate-400 leading-relaxed font-medium">
+              We track the variables that determine your building's future. From <span className="text-white font-bold">ACS Median Income</span> trends to <span className="text-white font-bold">RentCast Market Dynamics</span>, Evereez provides a professional "Scorecard" for every BBL in NYC.
+            </p>
+            <ul className="space-y-4">
+              <li className="flex items-center gap-3 text-slate-400"><Check className="w-5 h-5 text-indigo-500" /> Real-time demographic shifts tracking</li>
+              <li className="flex items-center gap-3 text-slate-400"><Check className="w-5 h-5 text-indigo-500" /> Professional 5-year ACS data lookups</li>
+              <li className="flex items-center gap-3 text-slate-400"><Check className="w-5 h-5 text-indigo-500" /> Comparative neighborhood rent analysis</li>
+            </ul>
           </motion.div>
         </div>
       </section>
@@ -490,8 +590,8 @@ function LandingPage({ onEnter, publicSearchQuery, handlePublicSearch, handleSea
               <ul className="space-y-4 mb-8 flex-1">
                 <li className="flex gap-3 text-white"><CheckCircle className="w-5 h-5 text-sky-400" /> Up to 20 Units</li>
                 <li className="flex gap-3 text-white"><CheckCircle className="w-5 h-5 text-sky-400" /> <b>Instant AI Affidavits</b></li>
-                <li className="flex gap-3 text-white"><CheckCircle className="w-5 h-5 text-sky-400" /> Priority Expert Dispatch</li>
-                <li className="flex gap-3 text-white"><CheckCircle className="w-5 h-5 text-sky-400" /> Financial Forecasting</li>
+                <li className="flex gap-3 text-white"><CheckCircle className="w-5 h-5 text-sky-400" /> Live US Census Insights</li>
+                <li className="flex gap-3 text-white"><CheckCircle className="w-5 h-5 text-sky-400" /> Portfolio ROI Heatmap</li>
               </ul>
               <Button className="w-full bg-indigo-500 hover:bg-sky-400 text-white font-bold py-6 rounded-xl shadow-lg shadow-blue-900/40" onClick={() => onEnter("manager", "Growth")}>Get Started</Button>
             </motion.div>
@@ -917,6 +1017,40 @@ function PropertyDetailsModal({ property, cityData, onClose, showToast, userRole
   const [ll97Loading, setLl97Loading] = useState(false)
   const [ll97Result, setLl97Result] = useState<any>(null)
 
+  const [marketData, setMarketData] = useState<any>(property?.market_value ? { 
+    property: { 
+      price: property.market_value, 
+      rent_estimate: property.rent_estimate 
+    } 
+  } : null)
+  const [marketLoading, setMarketLoading] = useState(false)
+
+  useEffect(() => {
+    // Only fetch if we don't have data OR if we want to refresh potentially stale data
+    if (property && (property.address || property.bbl)) {
+      const fetchMarketData = async () => {
+        // If we already have cached data, don't show loading spinner, just background refresh
+        if (!property.market_value) setMarketLoading(true);
+        try {
+          const url = new URL('/api/market-data', window.location.origin);
+          if (property.address) url.searchParams.append('address', property.address);
+          if (property.bbl) url.searchParams.append('bbl', property.bbl);
+          if (property.lat) url.searchParams.append('lat', property.lat.toString());
+          if (property.lng) url.searchParams.append('lng', property.lng.toString());
+          
+          const res = await fetch(url.toString());
+          const json = await res.json();
+          setMarketData(json);
+        } catch (e) {
+          console.error("Market Data Fetch Error:", e);
+        } finally {
+          setMarketLoading(false);
+        }
+      };
+      fetchMarketData();
+    }
+  }, [property.id]); // Use property.id to avoid unnecessary re-runs
+
   const handleSimulateLL97 = async () => {
     if (!ll97Props.address || !ll97Props.squareFootage) {
       alert("Address and Square Footage are required.");
@@ -1018,6 +1152,12 @@ function PropertyDetailsModal({ property, cityData, onClose, showToast, userRole
                     <div><div className="text-slate-500 mb-1">Class</div><div className="text-zinc-200 font-mono font-bold">{cityData?.registrations?.[0]?.class || "Class A"}</div></div>
                   </div>
                 </div>
+
+                <AssetHealthScorecard 
+                  marketData={marketData} 
+                  loading={marketLoading} 
+                  violationCount={cityData?.violations?.length || 0} 
+                />
 
                 {/* 2. Summary Stats & Codes Row */}
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
@@ -1280,6 +1420,7 @@ function AiHistoryModal({ isOpen, onClose, history, isLoading, onSelect }: { isO
 export default function APP_ROOT() {
   const [userRole, setUserRole] = useState<UserRole>(null)
   const [activeTab, setActiveTab] = useState('dashboard') // 'dashboard', 'map', 'reports', 'settings', 'll97', 'contractors'
+  const [viewMode, setViewMode] = useState<'compliance' | 'investment'>('compliance')
   const [isLoaded, setIsLoaded] = useState(false)
   const [userProfile, setUserProfile] = useState<any>(null)
   const [editProfile, setEditProfile] = useState<any>({}) // Local buffer for edits
@@ -1304,6 +1445,7 @@ export default function APP_ROOT() {
 
   // PDF Report Hook
   const { generatePDF, isGenerating: isGeneratingPDF } = useGeneratePDF()
+  const [isLoadingMarketData, setIsLoadingMarketData] = useState(false)
 
   // Auth State
   const [showAuthModal, setShowAuthModal] = useState<UserRole>(null)
@@ -1672,6 +1814,35 @@ export default function APP_ROOT() {
       fetchUsers()
     }
   }, [userRole, activeTab])
+
+  // Fetch Market Data for Investment Heatmap
+  useEffect(() => {
+    if (viewMode === 'investment' && properties.length > 0) {
+      const enrichMarketData = async () => {
+        const needsUpdate = properties.filter(p => !p.market_value || !p.rent_estimate);
+        if (needsUpdate.length === 0) return;
+        
+        setIsLoadingMarketData(true);
+        const updatedProps = await Promise.all(properties.map(async (p) => {
+          if (p.market_value && p.rent_estimate) return p;
+          try {
+            const res = await fetch(`/api/market-data?address=${encodeURIComponent(p.address)}&bbl=${p.bbl || ''}&lat=${p.lat || ''}&lng=${p.lng || ''}`);
+            const data = await res.json();
+            return {
+              ...p,
+              market_value: data.valuation?.price || p.market_value,
+              rent_estimate: data.valuation?.rent_estimate || p.rent_estimate
+            };
+          } catch (e) {
+            return p;
+          }
+        }));
+        setProperties(updatedProps);
+        setIsLoadingMarketData(false);
+      };
+      enrichMarketData();
+    }
+  }, [viewMode, properties.length]);
 
   // UI States
   const [showAddProperty, setShowAddProperty] = useState(false)
@@ -3399,6 +3570,16 @@ export default function APP_ROOT() {
     return matchesProperty && matchesCategory && matchesSearch
   }).sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
 
+  // Calculate Portfolio Financial Metrics
+  const totalPortfolioValue = properties.reduce((acc, p) => acc + (p.market_value || 0), 0)
+  const propertiesWithYield = properties.filter(p => p.market_value && p.rent_estimate)
+  const avgYield = propertiesWithYield.length > 0 
+    ? propertiesWithYield.reduce((acc, p) => {
+        const yieldVal = (p.rent_estimate! * 12 / p.market_value!) * 100
+        return acc + yieldVal
+      }, 0) / propertiesWithYield.length
+    : 0
+
   return (
     <div className="flex h-screen bg-background text-foreground overflow-hidden font-sans">
       <AnimatePresence>{toast && (
@@ -3525,8 +3706,8 @@ export default function APP_ROOT() {
                       <h1 className="text-4xl md:text-5xl font-black text-white tracking-tight leading-tight">
                         {new Date().getHours() < 12 ? 'Good Morning' : new Date().getHours() < 18 ? 'Good Afternoon' : 'Good Evening'}, <span className="text-transparent bg-clip-text bg-gradient-to-r from-sky-400 to-indigo-400">{userProfile?.full_name?.split(' ')[0] || 'Manager'}</span>
                       </h1>
-                      <p className="text-slate-400 text-lg max-w-xl leading-relaxed">
-                        Welcome back to your NYC compliance mission control. You have <span className="text-white font-bold">{properties.length} active properties</span> and <span className="text-amber-400 font-bold">{requests.filter(r => r.status === 'Pending').length} unresolved requests</span> that need your attention.
+                      <p className="text-slate-400 text-lg max-w-2xl leading-relaxed">
+                        Welcome back to your NYC compliance mission control. Your portfolio of <span className="text-white font-bold">{properties.length} properties</span> is currently valued at <span className="text-emerald-400 font-bold">${(totalPortfolioValue / 1000000).toFixed(1)}M</span> {avgYield > 0 && <span>with a <span className="text-sky-400 font-bold">{avgYield.toFixed(1)}%</span> avg yield.</span>} You have <span className="text-amber-400 font-bold">{requests.filter(r => r.status === 'Pending').length} pending requests</span> to review.
                       </p>
                     </div>
                     <div className="flex flex-wrap gap-4">
@@ -3673,13 +3854,31 @@ export default function APP_ROOT() {
                     {properties.filter(p => !['Pending Verification', 'Rejected'].includes(p.status || '')).length > 0 ? (
                       <div className="space-y-4">
                         <div className="flex items-center justify-between">
-                          <h3 className="text-lg font-bold text-white">Portfolio Map View</h3>
+                          <div className="flex items-center gap-4">
+                            <h3 className="text-lg font-bold text-white">Portfolio Map View</h3>
+                            <div className="flex bg-slate-800/50 p-0.5 rounded-lg border border-slate-700">
+                              <button
+                                onClick={() => setViewMode('compliance')}
+                                className={`px-2 py-0.5 rounded-[5px] text-[10px] font-bold transition-all ${viewMode === 'compliance' ? 'bg-sky-500 text-white' : 'text-slate-400 hover:text-slate-200'}`}
+                              >
+                                Compliance
+                              </button>
+                              <button
+                                onClick={() => setViewMode('investment')}
+                                className={`px-2 py-0.5 rounded-[5px] text-[10px] font-bold transition-all ${viewMode === 'investment' ? 'bg-indigo-500 text-white' : 'text-slate-400 hover:text-slate-200'}`}
+                              >
+                                Investment
+                              </button>
+                            </div>
+                            {isLoadingMarketData && <Activity className="w-3 h-3 animate-spin text-sky-400" />}
+                          </div>
                           <Button variant="ghost" size="sm" onClick={() => setActiveTab('map')} className="text-sky-400 hover:text-white">View Full Map <ArrowRight className="w-3 h-3 ml-1" /></Button>
                         </div>
                         <div className="h-[300px] rounded-3xl overflow-hidden border border-slate-700/50 shadow-inner shadow-black">
                           <MapViewer
                             properties={properties.filter(p => !['Rejected'].includes(p.status || ''))}
                             onSelectProperty={setManageProp}
+                            viewMode={viewMode}
                           />
                         </div>
                       </div>
@@ -3927,11 +4126,18 @@ export default function APP_ROOT() {
                       
                       <div className="flex justify-between items-center text-sm text-muted-foreground mb-3">
                         <span>{p.units} Units • {p.borough}</span>
-                        {p.violations > 0 && (
-                          <span className="text-amber-500 font-bold flex items-center gap-1">
-                            <AlertTriangle className="w-3 h-3" /> {p.violations}
-                          </span>
-                        )}
+                        <div className="flex items-center gap-2">
+                          {p.market_value && (
+                            <span className="text-emerald-500 font-bold text-xs" title="Est. Market Value">
+                              ${(p.market_value / 1000000).toFixed(1)}M
+                            </span>
+                          )}
+                          {p.violations > 0 && (
+                            <span className="text-amber-500 font-bold flex items-center gap-1">
+                              <AlertTriangle className="w-3 h-3" /> {p.violations}
+                            </span>
+                          )}
+                        </div>
                       </div>
 
                       <div className="flex items-center justify-between gap-2 mb-4 text-xs text-slate-500 bg-slate-900/60 backdrop-blur-md p-2 rounded-lg border border-slate-700/50 group/code">
@@ -4929,7 +5135,82 @@ export default function APP_ROOT() {
             )}
 
             {/* MAP */}
-            {activeTab === 'map' && <div className="h-full rounded-xl overflow-hidden border border-border"><MapViewer properties={properties.filter(p => !['Rejected'].includes(p.status || ''))} onSelectProperty={setManageProp} /></div>}
+            {activeTab === 'map' && (
+              <div className="h-full flex flex-col gap-4 animate-in fade-in duration-500">
+                <div className="flex justify-between items-center">
+                  <div className="flex items-center gap-4">
+                    <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+                      <MapIcon className="w-6 h-6 text-sky-400" /> 
+                      {viewMode === 'compliance' ? 'Compliance Risk Heatmap' : 'Portfolio Investment Heatmap'}
+                    </h2>
+                    <div className="flex bg-slate-900/50 p-1 rounded-xl border border-slate-800">
+                      <button
+                        onClick={() => setViewMode('compliance')}
+                        className={`px-4 py-1.5 rounded-lg text-sm font-bold transition-all ${viewMode === 'compliance' ? 'bg-sky-500 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
+                      >
+                        Compliance Mode
+                      </button>
+                      <button
+                        onClick={() => setViewMode('investment')}
+                        className={`px-4 py-1.5 rounded-lg text-sm font-bold transition-all ${viewMode === 'investment' ? 'bg-indigo-500 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
+                      >
+                        Investment Mode
+                      </button>
+                    </div>
+                    {isLoadingMarketData && <div className="flex items-center gap-2 text-xs text-indigo-400 font-bold animate-pulse">
+                      <Activity className="w-3 h-3 animate-spin" />
+                      Enriching Market Data...
+                    </div>}
+                  </div>
+                  <div className="flex gap-2">
+                    <Badge variant="outline" className="border-slate-800 text-slate-500">
+                      {properties.length} Properties Tracked
+                    </Badge>
+                  </div>
+                </div>
+                <div className="flex-1 rounded-3xl overflow-hidden border border-slate-700/50 shadow-2xl relative">
+                  <MapViewer 
+                    properties={properties.filter(p => !['Rejected'].includes(p.status || ''))} 
+                    onSelectProperty={setManageProp} 
+                    viewMode={viewMode}
+                  />
+                  
+                  {/* Map Legend */}
+                  <div className="absolute bottom-6 left-6 z-[1000] bg-slate-900/90 backdrop-blur-md border border-slate-700/50 p-4 rounded-2xl shadow-2xl pointer-events-none">
+                    <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">
+                      {viewMode === 'compliance' ? 'Risk Indicators' : 'Yield Potential'}
+                    </h4>
+                    <div className="space-y-2">
+                      {viewMode === 'compliance' ? (
+                        <>
+                          <div className="flex items-center gap-2 text-xs font-medium text-slate-300">
+                            <div className="w-3 h-3 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"></div> Healthy
+                          </div>
+                          <div className="flex items-center gap-2 text-xs font-medium text-slate-300">
+                            <div className="w-3 h-3 rounded-full bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.5)]"></div> Warning
+                          </div>
+                          <div className="flex items-center gap-2 text-xs font-medium text-slate-300">
+                            <div className="w-3 h-3 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]"></div> Critical Risk
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="flex items-center gap-2 text-xs font-medium text-slate-300">
+                            <div className="w-3 h-3 rounded-full bg-indigo-600 shadow-[0_0_8px_rgba(79,70,229,0.5)]"></div> Premium (Yield &gt; 8%)
+                          </div>
+                          <div className="flex items-center gap-2 text-xs font-medium text-slate-300">
+                            <div className="w-3 h-3 rounded-full bg-indigo-400 shadow-[0_0_8px_rgba(129,140,248,0.5)]"></div> Optimized (6-8%)
+                          </div>
+                          <div className="flex items-center gap-2 text-xs font-medium text-slate-300">
+                            <div className="w-3 h-3 rounded-full bg-slate-600 shadow-[0_0_8px_rgba(71,85,105,0.5)]"></div> Standard (&lt;6%)
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </ErrorBoundary>
         <DocumentPreviewModal doc={selectedDoc} onClose={() => setSelectedDoc(null)} />
